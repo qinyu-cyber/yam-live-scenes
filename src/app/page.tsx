@@ -56,7 +56,9 @@ export default function Home() {
   }, [])
 
   const enterVilla = useCallback(async () => {
-    await audioEngine.unlock()
+    // Mic denial must not kill the show — the AudioContext is created before
+    // the getUserMedia call, so playback still works; only the mic is lost.
+    await audioEngine.unlock().catch((err) => console.warn('[unlock]', err))
     manifestRef.current = await loadManifest()
     setEntered(true)
     audioEngine.setState('playing')
