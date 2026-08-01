@@ -47,3 +47,7 @@ PLAN.md
 YAM-SOURCES.md
 .cache/
 data/turns.jsonl
+
+# demo art (copyrighted stills stay local-only)
+public/images/bg-villa.jpg
+public/images/portraits/*.png
