@@ -50,6 +50,8 @@ export type VoiceLoopHandlers = {
   onSpeechStart: () => void
   onSpeechEnd: (wav: Blob, durationMs: number) => void
   onMicError: () => void
+  /** Called ~every 130ms with the current mic RMS — drive a level indicator. */
+  onLevel?: (rms: number) => void
 }
 
 export class VoiceLoop {
@@ -90,11 +92,14 @@ export class VoiceLoop {
     return true
   }
 
+  private frameCount = 0
+
   private onFrame(frame: Float32Array): void {
     const copy = new Float32Array(frame)
     let sum = 0
     for (let i = 0; i < copy.length; i++) sum += copy[i] * copy[i]
     const rms = Math.sqrt(sum / copy.length)
+    if (this.frameCount++ % 3 === 0) this.handlers.onLevel?.(rms)
 
     if (!this.speaking) {
       this.preroll.push(copy)

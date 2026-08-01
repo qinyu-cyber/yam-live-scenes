@@ -28,9 +28,12 @@ export default function Home() {
   const [branch, setBranch] = useState<'live' | 'preauthored' | null>(null)
   const [timings, setTimings] = useState<Record<string, number> | null>(null)
   const [micOk, setMicOk] = useState<boolean | null>(null)
+  const [openingDone, setOpeningDone] = useState(false)
+  const [micLevel, setMicLevel] = useState(0)
   const manifestRef = useRef<Record<string, string> | null>(null)
   const openingDoneRef = useRef(false)
   const turnInFlightRef = useRef(false)
+  const pendingWavRef = useRef<Blob | null>(null)
   const voiceLoopRef = useRef<VoiceLoop | null>(null)
 
   useEffect(() => audioEngine.onStateChange(setEngineState), [])
@@ -172,9 +175,16 @@ export default function Home() {
       logTable()
       if (audioEngine.getState() === 'playing') audioEngine.setState('listening')
       turnInFlightRef.current = false
+      // A barge-in utterance may have arrived while this turn was finishing —
+      // it becomes the next turn immediately.
+      const pending = pendingWavRef.current
+      pendingWavRef.current = null
+      if (pending) void runTurnRef.current?.(pending)
     },
     [playBeat],
   )
+  const runTurnRef = useRef<typeof runTurn | null>(null)
+  runTurnRef.current = runTurn
 
   const enterVilla = useCallback(async () => {
     // Audio unlock must not die on mic denial — playback still works.
@@ -185,19 +195,27 @@ export default function Home() {
     // over a character is a barge-in, no button anywhere.
     const loop = new VoiceLoop({
       onSpeechStart: () => {
-        if (turnInFlightRef.current || !openingDoneRef.current) return
+        if (!openingDoneRef.current) return // the cold open always lands
+        // Barge-in: characters stop the moment the player starts talking —
+        // including mid-branch while a turn is still technically in flight.
         if (audioEngine.getState() === 'playing') {
           audioEngine.stop()
           audioEngine.setState('listening')
         }
-        newTurn()
+        if (!turnInFlightRef.current) newTurn()
       },
       onSpeechEnd: (wav) => {
-        if (turnInFlightRef.current || !openingDoneRef.current) return
-        if (audioEngine.getState() !== 'listening') return
+        if (!openingDoneRef.current) return
+        if (turnInFlightRef.current) {
+          // The interrupted turn is still unwinding — park the utterance; it
+          // starts the next turn the instant the old one releases.
+          pendingWavRef.current = wav
+          return
+        }
         void runTurn(wav)
       },
       onMicError: () => setMicOk(false),
+      onLevel: (rms) => setMicLevel(rms),
     })
     voiceLoopRef.current = loop
     void loop.start().then((ok) => setMicOk(ok))
@@ -212,6 +230,7 @@ export default function Home() {
       await playBeat(OPENING.beats[i], `opening_${i}`, next?.cutoff ? 0.72 : undefined)
     }
     openingDoneRef.current = true
+    setOpeningDone(true)
     setNarration(null)
     setCaption({ speaker: idToName(OPENING.asker), text: OPENING.question })
     audioEngine.setState('listening')
@@ -237,21 +256,25 @@ export default function Home() {
         />
       }
     >
-      {/* Conversation status pill — replaces the old hold-to-talk button. */}
+      {/* Conversation status pill — replaces the old hold-to-talk button.
+          The dot doubles as a live mic level meter so you can SEE that the
+          villa hears you. */}
       <div className="pointer-events-none flex items-center gap-2 rounded-full border border-white/15 bg-black/40 px-4 py-2 text-sm text-white/80 backdrop-blur">
         {micOk === false ? (
           <span>mic blocked — click the 🔒 by the address bar, allow Microphone, refresh</span>
-        ) : engineState === 'listening' ? (
-          <>
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-emerald-400" />
-            <span>listening — just talk</span>
-          </>
+        ) : !openingDone ? (
+          <span>the villa is talking — Gojo turns to you in a moment</span>
         ) : engineState === 'thinking' ? (
           <span>…</span>
         ) : (
           <>
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
-            <span>speak any time to jump in</span>
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${engineState === 'listening' ? 'bg-emerald-400' : 'bg-amber-400'}`}
+              style={{ transform: `scale(${Math.min(2.5, 1 + micLevel * 25)})`, transition: 'transform 120ms' }}
+            />
+            <span>
+              {engineState === 'listening' ? 'listening — just talk' : 'talk to cut them off'}
+            </span>
           </>
         )}
       </div>
