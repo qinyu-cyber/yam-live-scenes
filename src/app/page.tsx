@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Beat, CharId, EngineState, RelScores, SceneResponse, Stance } from '@/lib/types'
+import type { Beat, CharId, EngineState, RelScores, SceneStreamLine, Stance } from '@/lib/types'
 import { audioEngine, loadManifest } from '@/lib/audioEngine'
 import { getStt } from '@/lib/stt'
 import { markTurn, newTurn, currentTurn, logTable } from '@/lib/metrics'
@@ -99,12 +99,55 @@ export default function Home() {
     const lines = REACTION_LINES[localStance]
     const reaction = lines[text.length % lines.length]
 
-    // Fire the branch request and the masking reaction line in parallel.
-    const scenePromise = fetch('/api/scene', {
+    // Fire the branch request; beats stream in while the reaction line masks.
+    const res = await fetch('/api/scene', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ transcript: text, emotion: detected }),
-    }).then((r) => r.json() as Promise<SceneResponse>)
+    })
+
+    const beatQueue: Beat[] = []
+    let streamDone = false
+    const consume = (async () => {
+      const reader = res.body?.getReader()
+      if (!reader) return
+      const decoder = new TextDecoder()
+      let buf = ''
+      const handle = (raw: string) => {
+        if (!raw.trim()) return
+        let line: SceneStreamLine
+        try {
+          line = JSON.parse(raw)
+        } catch {
+          return
+        }
+        if (line.type === 'meta') {
+          setRel((prev) => {
+            const next = { ...prev }
+            for (const [id, d] of Object.entries(line.relDeltas)) {
+              next[id as CharId] = (next[id as CharId] ?? 0) + (d ?? 0)
+            }
+            return next
+          })
+        } else if (line.type === 'beat') {
+          if (beatQueue.length === 0 && !streamDone) markTurn('llm_first_token')
+          beatQueue.push(line.beat)
+        } else if (line.type === 'done') {
+          setBranch(line.branch)
+        }
+      }
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buf += decoder.decode(value, { stream: true })
+        const parts = buf.split('\n')
+        buf = parts.pop() ?? ''
+        parts.forEach(handle)
+      }
+      handle(buf)
+    })().finally(() => {
+      streamDone = true
+    })
 
     audioEngine.setState('playing')
     await playBeat(
@@ -112,22 +155,19 @@ export default function Home() {
       `reaction_${reaction.id}`,
     )
 
-    const scene = await scenePromise
-    markTurn('llm_first_token')
-    setBranch(scene.branch)
-    setRel((prev) => {
-      const next = { ...prev }
-      for (const [id, d] of Object.entries(scene.relDeltas)) {
-        next[id as CharId] = (next[id as CharId] ?? 0) + (d ?? 0)
-      }
-      return next
-    })
-
+    // Play beats as they arrive; the queue drains while the stream still fills.
     markTurn('playback_start')
-    for (const beat of scene.beats) {
+    for (;;) {
       if (audioEngine.getState() !== 'playing') break // barge-in mid-branch
-      await playBeat(beat, `beat_live_${beat.speaker}`)
+      const beat = beatQueue.shift()
+      if (beat) {
+        await playBeat(beat, `beat_live_${beat.speaker}`)
+        continue
+      }
+      if (streamDone) break
+      await new Promise((r) => setTimeout(r, 100))
     }
+    await consume.catch(() => {})
     setTimings(currentTurn())
     logTable()
     if (audioEngine.getState() === 'playing') audioEngine.setState('listening')

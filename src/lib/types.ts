@@ -32,13 +32,9 @@ export type SceneTimings = {
 // API shapes (implemented in src/app/api/*):
 // POST /api/tts   { text, voiceId, emotion? } -> streamed passthrough of Inworld voice:stream
 // POST /api/stt   FormData(audio)             -> { text: string, emotion?: string, ms: number }
-// POST /api/scene { transcript, emotion?, openingContext }
-//                 -> { stance, reactionLineId, beats: Beat[], relDeltas: RelScores, timings: SceneTimings }
-export type SceneResponse = {
-  stance: Stance
-  reactionLineId: string
-  beats: Beat[]
-  relDeltas: RelScores
-  timings: SceneTimings
-  branch: 'live' | 'preauthored'
-}
+// POST /api/scene { transcript, emotion? }    -> NDJSON stream of SceneStreamLine
+//   (streamed so the client can voice beat 1 while the rest still generates)
+export type SceneStreamLine =
+  | { type: 'meta'; stance: Stance; reactionLineId: string; relDeltas: RelScores }
+  | { type: 'beat'; beat: Beat }
+  | { type: 'done'; branch: 'live' | 'preauthored'; timings: SceneTimings }
