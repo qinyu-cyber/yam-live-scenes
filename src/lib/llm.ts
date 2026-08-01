@@ -24,6 +24,7 @@ const BEATS_SCHEMA = {
           speaker: { type: 'string' as const },
           line: { type: 'string' as const },
           emotion: { type: 'string' as const },
+          cutoff: { type: 'boolean' as const },
         },
         required: ['speaker', 'line', 'emotion'],
         additionalProperties: false,

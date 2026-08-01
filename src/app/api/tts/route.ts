@@ -6,10 +6,11 @@ import path from 'path'
 import { ttsStream } from '@/lib/inworld'
 
 export async function POST(req: Request) {
-  const { text, voiceId, emotion } = (await req.json()) as {
+  const { text, voiceId, emotion, rate } = (await req.json()) as {
     text?: string
     voiceId?: string
     emotion?: string
+    rate?: number
   }
   if (!text || !voiceId) {
     return Response.json({ error: 'text and voiceId are required' }, { status: 400 })
@@ -19,7 +20,8 @@ export async function POST(req: Request) {
   }
 
   const fullText = emotion ? `[${emotion}] ${text}` : text
-  const hash = createHash('sha1').update(`${fullText}|${voiceId}`).digest('hex')
+  const speakingRate = typeof rate === 'number' ? rate : 1.0
+  const hash = createHash('sha1').update(`${fullText}|${voiceId}|${speakingRate}`).digest('hex')
   const cacheFile = path.join(process.cwd(), '.cache', 'tts', `${hash}.ndjson`)
   const ndjsonHeaders = { 'Content-Type': 'application/x-ndjson' }
 
@@ -32,7 +34,7 @@ export async function POST(req: Request) {
 
   let upstream: Response
   try {
-    upstream = await ttsStream(fullText, voiceId)
+    upstream = await ttsStream(fullText, voiceId, speakingRate)
   } catch (err) {
     return Response.json({ error: String(err) }, { status: 502 })
   }

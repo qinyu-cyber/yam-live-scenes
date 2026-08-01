@@ -62,7 +62,7 @@ class AudioEngine {
   // are NOT independently decodable — accumulate every chunk, decode once,
   // play. The whole stream arrives in well under a second, so the cost over
   // progressive decoding is negligible.
-  async playStream(res: Response): Promise<void> {
+  async playStream(res: Response, cutFraction?: number): Promise<void> {
     const ctx = this.ctx
     if (!ctx || !res.body) return
     const gen = this.gen
@@ -104,20 +104,12 @@ class AudioEngine {
       return // undecodable audio — skip the line rather than crash the scene
     }
     if (this.gen !== gen) return
-    const src = ctx.createBufferSource()
-    src.buffer = audio
-    src.connect(ctx.destination)
-    this.nodes.push(src)
-    await new Promise<void>((resolve) => {
-      this.endResolve = resolve
-      src.onended = () => resolve()
-      src.start()
-    })
-    this.endResolve = null
+    await this.playBuffer(audio, cutFraction)
   }
 
   // Prebaked mp3 playback: fetch → decode → play; resolves when it ends.
-  async playUrl(url: string): Promise<void> {
+  // `cutFraction` (0..1) truncates playback — the next speaker cuts this one off.
+  async playUrl(url: string, cutFraction?: number): Promise<void> {
     const ctx = this.ctx
     if (!ctx) return
     const gen = this.gen
@@ -126,6 +118,12 @@ class AudioEngine {
     if (this.gen !== gen) return
     const audio = await ctx.decodeAudioData(data)
     if (this.gen !== gen) return
+    await this.playBuffer(audio, cutFraction)
+  }
+
+  private async playBuffer(audio: AudioBuffer, cutFraction?: number): Promise<void> {
+    const ctx = this.ctx
+    if (!ctx) return
     const src = ctx.createBufferSource()
     src.buffer = audio
     src.connect(ctx.destination)
@@ -134,6 +132,10 @@ class AudioEngine {
       this.endResolve = resolve
       src.onended = () => resolve()
       src.start()
+      if (cutFraction && cutFraction > 0 && cutFraction < 1) {
+        // mid-word truncation: the interrupting speaker starts right after
+        src.stop(ctx.currentTime + audio.duration * cutFraction)
+      }
     })
     this.endResolve = null
   }

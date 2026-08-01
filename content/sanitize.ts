@@ -26,7 +26,9 @@ export function sanitizeBeats(raw: unknown): Beat[] {
     const line = typeof rec.line === 'string' ? rec.line.trim().slice(0, MAX_LINE_CHARS) : ''
     if (!speaker || line.length === 0) continue
     const emotion = typeof rec.emotion === 'string' ? rec.emotion.trim() : ''
-    out.push(emotion ? { speaker, line, emotion } : { speaker, line })
+    const beat: Beat = emotion ? { speaker, line, emotion } : { speaker, line }
+    if (rec.cutoff === true) beat.cutoff = true
+    out.push(beat)
     if (out.length >= MAX_BEATS) break
   }
   return out

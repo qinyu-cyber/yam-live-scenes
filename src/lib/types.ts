@@ -3,8 +3,10 @@
 export type CharId = 'gojo' | 'sukuna' | 'toji' | 'choso' | 'nanami' | 'geto'
 
 // The only place dialogue lives. Never prose. `emotion` is an Inworld steering tag
-// (e.g. "happy", "whisper") rendered as a [tag] prefix at TTS time.
-export type Beat = { speaker: CharId; line: string; emotion?: string }
+// (e.g. "happy", "whisper") rendered as a [tag] prefix at TTS time. `cutoff`
+// means THIS beat interrupts the previous speaker — the prior line is truncated
+// at ~70% and this one starts immediately.
+export type Beat = { speaker: CharId; line: string; emotion?: string; cutoff?: boolean }
 
 export type Stance =
   | 'villain_romance'

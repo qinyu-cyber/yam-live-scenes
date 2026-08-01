@@ -1,45 +1,82 @@
-// Two Stt implementations: serverStt (MediaRecorder → POST /api/stt, primary)
-// and webStt (webkitSpeechRecognition, fallback via ?stt=web).
+// Two Stt implementations: serverStt (PCM→WAV → POST /api/stt, primary) and
+// webStt (webkitSpeechRecognition, fallback via ?stt=web).
+// WAV instead of MediaRecorder: Inworld batch STT rejects webm containers
+// ("only WAV, MP3, OGG, FLAC, and M4A are supported" — verified live), so we
+// capture raw PCM off the mic stream and wrap it in a 16-bit mono WAV header.
 import type { Stt } from './types'
 import { audioEngine } from './audioEngine'
 
+function encodeWav(chunks: Float32Array[], sampleRate: number): Blob {
+  const samples = chunks.reduce((n, c) => n + c.length, 0)
+  const buf = new ArrayBuffer(44 + samples * 2)
+  const view = new DataView(buf)
+  const writeStr = (off: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i))
+  }
+  writeStr(0, 'RIFF')
+  view.setUint32(4, 36 + samples * 2, true)
+  writeStr(8, 'WAVE')
+  writeStr(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true) // PCM
+  view.setUint16(22, 1, true) // mono
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  writeStr(36, 'data')
+  view.setUint32(40, samples * 2, true)
+  let off = 44
+  for (const c of chunks) {
+    for (let i = 0; i < c.length; i++) {
+      const s = Math.max(-1, Math.min(1, c[i]))
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true)
+      off += 2
+    }
+  }
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
 export const serverStt: Stt = (() => {
-  let recorder: MediaRecorder | null = null
-  let chunks: Blob[] = []
+  let ctx: AudioContext | null = null
+  let proc: ScriptProcessorNode | null = null
+  let source: MediaStreamAudioSourceNode | null = null
+  let chunks: Float32Array[] = []
   return {
     start() {
       const stream = audioEngine.getMicStream()
       if (!stream) return
       chunks = []
-      const mime = 'audio/webm;codecs=opus'
-      recorder = new MediaRecorder(
-        stream,
-        MediaRecorder.isTypeSupported(mime) ? { mimeType: mime } : undefined
-      )
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data)
+      ctx = new AudioContext()
+      source = ctx.createMediaStreamSource(stream)
+      proc = ctx.createScriptProcessor(4096, 1, 1)
+      proc.onaudioprocess = (e) => {
+        chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)))
       }
-      recorder.start()
+      // Route through a muted gain so the processor runs without mic echo.
+      const mute = ctx.createGain()
+      mute.gain.value = 0
+      source.connect(proc)
+      proc.connect(mute)
+      mute.connect(ctx.destination)
     },
-    stop() {
-      return new Promise((resolve, reject) => {
-        const rec = recorder
-        recorder = null
-        if (!rec || rec.state === 'inactive') return resolve({ text: '' })
-        rec.onstop = async () => {
-          try {
-            const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' })
-            const form = new FormData()
-            form.append('audio', blob, 'audio.webm')
-            const res = await fetch('/api/stt', { method: 'POST', body: form })
-            const json = await res.json()
-            resolve({ text: json.text ?? '', emotion: json.emotion })
-          } catch (err) {
-            reject(err)
-          }
-        }
-        rec.stop()
-      })
+    async stop() {
+      const c = ctx
+      ctx = null
+      if (!c || !proc) return { text: '' }
+      const sampleRate = c.sampleRate
+      proc.disconnect()
+      source?.disconnect()
+      proc = null
+      source = null
+      await c.close().catch(() => {})
+      if (chunks.length === 0) return { text: '' }
+      const form = new FormData()
+      form.append('audio', encodeWav(chunks, sampleRate), 'audio.wav')
+      chunks = []
+      const res = await fetch('/api/stt', { method: 'POST', body: form })
+      const json = await res.json()
+      return { text: json.text ?? '', emotion: json.emotion }
     },
   }
 })()

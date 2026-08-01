@@ -27,6 +27,7 @@ export const OPENING: {
       speaker: 'gojo',
       line: 'Oh he brought the jacket. The sixty-one percent jacket. You printed a NUMBER on CLOTHING. Who hurt you?',
       emotion: 'happy',
+      cutoff: true, // talks right over Sukuna
     },
     {
       speaker: 'nanami',
@@ -62,6 +63,7 @@ export const OPENING: {
       speaker: 'sukuna',
       line: 'Ha! Look at that. The loud one finally ran out of words. Best premiere we have ever had.',
       emotion: 'happy',
+      cutoff: true, // pounces on Gojo's stumble
     },
     {
       speaker: 'nanami',
@@ -72,6 +74,7 @@ export const OPENING: {
       speaker: 'gojo',
       line: "Hold on — new face at the door. You watched ALL of that and you're still standing there. So tell me: whose side are you walking in on?",
       emotion: 'happy',
+      cutoff: true, // cuts Nanami off the moment he spots the player
     },
   ],
   question: "You watched all of that and you're still here. Whose side are you walking in on?",

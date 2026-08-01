@@ -33,12 +33,13 @@ export default function Home() {
   useEffect(() => audioEngine.onStateChange(setEngineState), [])
 
   // Play one beat: prebaked file if the manifest has it, else live streamed TTS.
-  const playBeat = useCallback(async (beat: Beat, manifestKey: string) => {
+  // `cutFraction` truncates THIS beat early — used when the next beat cuts in.
+  const playBeat = useCallback(async (beat: Beat, manifestKey: string, cutFraction?: number) => {
     setSpeaking(beat.speaker)
     setCaption({ speaker: idToName(beat.speaker), text: beat.line })
     const url = manifestRef.current?.[manifestKey]
     if (url) {
-      await audioEngine.playUrl(url)
+      await audioEngine.playUrl(url, cutFraction)
     } else {
       const voice = VOICES[beat.speaker]
       const res = await fetch('/api/tts', {
@@ -48,9 +49,10 @@ export default function Home() {
           text: beat.line,
           voiceId: voice.voiceId,
           emotion: beat.emotion ?? voice.defaultEmotion,
+          rate: voice.rate,
         }),
       })
-      if (res.ok) await audioEngine.playStream(res)
+      if (res.ok) await audioEngine.playStream(res, cutFraction)
     }
     setSpeaking(null)
   }, [])
@@ -65,7 +67,8 @@ export default function Home() {
     // The authored cold open. Barge-in is off here — the cinematic must land.
     for (let i = 0; i < OPENING.beats.length; i++) {
       if (audioEngine.getState() !== 'playing') return
-      await playBeat(OPENING.beats[i], `opening_${i}`)
+      const next = OPENING.beats[i + 1]
+      await playBeat(OPENING.beats[i], `opening_${i}`, next?.cutoff ? 0.72 : undefined)
     }
     setOpeningDone(true)
     setCaption({ speaker: idToName(OPENING.asker), text: OPENING.question })
@@ -88,6 +91,7 @@ export default function Home() {
     markTurn('stt_done')
     setEmotion(detected ?? null)
     if (!text.trim()) {
+      setCaption({ text: "(didn't catch that — hold the mic and try again)" })
       audioEngine.setState('listening')
       return
     }
@@ -163,7 +167,8 @@ export default function Home() {
       if (audioEngine.getState() !== 'playing') break // barge-in mid-branch
       const beat = beatQueue.shift()
       if (beat) {
-        await playBeat(beat, `beat_live_${beat.speaker}`)
+        // If the already-arrived next beat cuts in, truncate this one early.
+        await playBeat(beat, `beat_live_${beat.speaker}`, beatQueue[0]?.cutoff ? 0.72 : undefined)
         continue
       }
       if (streamDone) break

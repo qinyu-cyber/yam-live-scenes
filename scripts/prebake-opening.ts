@@ -15,8 +15,8 @@ import type { Beat } from '../src/lib/types'
 
 const OUT = path.join(process.cwd(), 'public', 'audio', 'prebaked')
 
-async function renderToMp3(text: string, voiceId: string): Promise<Buffer> {
-  const res = await ttsStream(text, voiceId)
+async function renderToMp3(text: string, voiceId: string, rate: number): Promise<Buffer> {
+  const res = await ttsStream(text, voiceId, rate)
   const body = await res.text()
   const parts: Buffer[] = []
   for (const line of body.split('\n')) {
@@ -36,7 +36,7 @@ async function renderToMp3(text: string, voiceId: string): Promise<Buffer> {
 async function bake(beat: Beat, file: string): Promise<number> {
   const voice = VOICES[beat.speaker]
   const text = `[${beat.emotion ?? voice.defaultEmotion}] ${beat.line}`
-  const mp3 = await renderToMp3(text, voice.voiceId)
+  const mp3 = await renderToMp3(text, voice.voiceId, voice.rate)
   await writeFile(file, mp3)
   return mp3.length
 }
