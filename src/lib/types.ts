@@ -18,7 +18,8 @@ export type EngineState = 'idle' | 'playing' | 'listening' | 'thinking'
 
 export interface Stt {
   start(): void
-  stop(): Promise<{ text: string; emotion?: string }>
+  // error: 'mic' = no usable microphone; 'server' = STT request failed.
+  stop(): Promise<{ text: string; emotion?: string; error?: 'mic' | 'server' }>
 }
 
 // Per-character relationship scores, shown in the DebugPanel.

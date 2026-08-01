@@ -87,11 +87,18 @@ export default function Home() {
   const onHoldEnd = useCallback(async () => {
     markTurn('mic_release')
     audioEngine.setState('thinking')
-    const { text, emotion: detected } = await getStt().stop()
+    const { text, emotion: detected, error } = await getStt().stop()
     markTurn('stt_done')
     setEmotion(detected ?? null)
     if (!text.trim()) {
-      setCaption({ text: "(didn't catch that — hold the mic and try again)" })
+      setCaption({
+        text:
+          error === 'mic'
+            ? '(microphone unavailable — click the 🔒 by the address bar, allow Microphone, then refresh)'
+            : error === 'server'
+              ? '(speech service hiccup — hold and try again)'
+              : "(didn't catch that — hold the mic while speaking, release when done)",
+      })
       audioEngine.setState('listening')
       return
     }

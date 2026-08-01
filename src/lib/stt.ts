@@ -42,41 +42,72 @@ export const serverStt: Stt = (() => {
   let proc: ScriptProcessorNode | null = null
   let source: MediaStreamAudioSourceNode | null = null
   let chunks: Float32Array[] = []
+  let setup: Promise<boolean> | null = null
+
+  async function acquireStream(): Promise<MediaStream | null> {
+    const existing = audioEngine.getMicStream()
+    // The unlock-time stream can be missing (permission denied at unlock) or
+    // dead (track ended after a device change) — re-request on demand.
+    if (existing && existing.getAudioTracks().some((t) => t.readyState === 'live')) {
+      return existing
+    }
+    try {
+      return await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch (err) {
+      console.warn('[stt] mic unavailable:', err)
+      return null
+    }
+  }
+
   return {
     start() {
-      const stream = audioEngine.getMicStream()
-      if (!stream) return
       chunks = []
-      ctx = new AudioContext()
-      source = ctx.createMediaStreamSource(stream)
-      proc = ctx.createScriptProcessor(4096, 1, 1)
-      proc.onaudioprocess = (e) => {
-        chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)))
-      }
-      // Route through a muted gain so the processor runs without mic echo.
-      const mute = ctx.createGain()
-      mute.gain.value = 0
-      source.connect(proc)
-      proc.connect(mute)
-      mute.connect(ctx.destination)
+      setup = (async () => {
+        const stream = await acquireStream()
+        if (!stream) return false
+        ctx = new AudioContext()
+        source = ctx.createMediaStreamSource(stream)
+        proc = ctx.createScriptProcessor(4096, 1, 1)
+        proc.onaudioprocess = (e) => {
+          chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)))
+        }
+        // Route through a muted gain so the processor runs without mic echo.
+        const mute = ctx.createGain()
+        mute.gain.value = 0
+        source.connect(proc)
+        proc.connect(mute)
+        mute.connect(ctx.destination)
+        return true
+      })()
     },
     async stop() {
+      const ok = await (setup ?? Promise.resolve(false))
+      setup = null
       const c = ctx
       ctx = null
-      if (!c || !proc) return { text: '' }
+      if (!ok || !c || !proc) return { text: '', error: 'mic' }
       const sampleRate = c.sampleRate
       proc.disconnect()
       source?.disconnect()
       proc = null
       source = null
       await c.close().catch(() => {})
-      if (chunks.length === 0) return { text: '' }
+      if (chunks.length === 0) return { text: '', error: 'mic' }
       const form = new FormData()
       form.append('audio', encodeWav(chunks, sampleRate), 'audio.wav')
       chunks = []
-      const res = await fetch('/api/stt', { method: 'POST', body: form })
-      const json = await res.json()
-      return { text: json.text ?? '', emotion: json.emotion }
+      try {
+        const res = await fetch('/api/stt', { method: 'POST', body: form })
+        if (!res.ok) {
+          console.error('[stt] server error:', res.status, await res.text().catch(() => ''))
+          return { text: '', error: 'server' }
+        }
+        const json = await res.json()
+        return { text: json.text ?? '', emotion: json.emotion }
+      } catch (err) {
+        console.error('[stt] request failed:', err)
+        return { text: '', error: 'server' }
+      }
     },
   }
 })()
