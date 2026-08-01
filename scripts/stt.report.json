@@ -1,0 +1,4 @@
+{
+  "status": "deferred - no .env",
+  "notes": "INWORLD_API_KEY missing"
+}

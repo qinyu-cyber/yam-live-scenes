@@ -9,6 +9,10 @@
     "lint": "eslint",
     "smoke:tts": "bun scripts/smoke-tts.ts",
     "smoke:stt": "bun scripts/smoke-stt.ts",
+    "probe:tt": "bun scripts/probe-tenstorrent.ts",
+    "eval:stance": "bun scripts/eval-stance.ts",
+    "smoke:tts": "bun scripts/smoke-tts.ts",
+    "smoke:stt": "bun scripts/smoke-stt.ts",
     "probe:tt": "bun scripts/probe-tenstorrent.ts"
   },
   "dependencies": {

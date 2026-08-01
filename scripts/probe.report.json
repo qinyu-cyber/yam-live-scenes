@@ -1,0 +1,4 @@
+{
+  "status": "deferred - no .env",
+  "notes": "TENSTORRENT_API_KEY missing"
+}
