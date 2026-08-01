@@ -42,9 +42,14 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
   throw lastErr
 }
 
-/** Streams TTS audio. Returns the raw upstream Response (NDJSON body) for passthrough.
- * `rate` is Inworld speakingRate, valid range [0.5, 1.5]. */
-export function ttsStream(text: string, voiceId: string, rate = 1.0): Promise<Response> {
+export type TtsOpts = {
+  rate?: number // speakingRate [0.5, 1.5]
+  deliveryMode?: 'STABLE' | 'BALANCED' | 'CREATIVE'
+  temperature?: number // (0, 2]
+}
+
+/** Streams TTS audio. Returns the raw upstream Response (NDJSON body) for passthrough. */
+export function ttsStream(text: string, voiceId: string, opts: TtsOpts = {}): Promise<Response> {
   return fetchWithRetry(`${BASE}/tts/v1/voice:stream`, {
     method: 'POST',
     headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
@@ -52,9 +57,11 @@ export function ttsStream(text: string, voiceId: string, rate = 1.0): Promise<Re
       text,
       voiceId,
       modelId: 'inworld-tts-1',
+      ...(opts.deliveryMode ? { deliveryMode: opts.deliveryMode } : {}),
+      ...(opts.temperature ? { temperature: Math.min(2, Math.max(0.1, opts.temperature)) } : {}),
       audioConfig: {
         audioEncoding: 'MP3',
-        speakingRate: Math.min(1.5, Math.max(0.5, rate)),
+        speakingRate: Math.min(1.5, Math.max(0.5, opts.rate ?? 1.0)),
       },
     }),
   })

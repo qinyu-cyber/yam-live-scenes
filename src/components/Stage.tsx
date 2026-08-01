@@ -12,11 +12,12 @@ const ARC_OFFSETS = [0, 16, 28, 28, 16, 0]
 type StageProps = {
   speaking: CharId | null
   caption: { speaker?: string; text: string } | null
+  narration?: string | null
   children?: ReactNode
   debug?: ReactNode
 }
 
-export default function Stage({ speaking, caption, children, debug }: StageProps) {
+export default function Stage({ speaking, caption, narration, children, debug }: StageProps) {
   const [bgOk, setBgOk] = useState(true)
 
   return (
@@ -41,6 +42,15 @@ export default function Stage({ speaking, caption, children, debug }: StageProps
       {/* Darkening vignette so UI stays readable over any background. */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/40" />
 
+      {/* Narration strip — on-screen only, never spoken by a character. */}
+      {narration && (
+        <div className="absolute inset-x-0 top-6 flex justify-center px-6">
+          <p className="max-w-2xl rounded-xl bg-black/45 px-5 py-3 text-center text-sm italic leading-relaxed text-amber-100/90 backdrop-blur">
+            {narration}
+          </p>
+        </div>
+      )}
+
       {/* Cast arc across the lower-middle. */}
       <div className="absolute inset-x-0 bottom-40 flex items-end justify-center gap-3 px-4 sm:gap-6">
         {CAST_ORDER.map((id, i) => (
@@ -60,8 +70,8 @@ export default function Stage({ speaking, caption, children, debug }: StageProps
         <Captions caption={caption} accent={speaking ? CAST_UI[speaking].accent : undefined} />
       </div>
 
-      {/* Slot for MicButton etc. */}
-      {children}
+      {/* Conversation status slot, bottom-center above the captions. */}
+      <div className="absolute inset-x-0 bottom-24 flex justify-center">{children}</div>
 
       {/* Slot for DebugPanel. */}
       {debug}

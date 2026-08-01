@@ -16,12 +16,6 @@ export type Stance =
 
 export type EngineState = 'idle' | 'playing' | 'listening' | 'thinking'
 
-export interface Stt {
-  start(): void
-  // error: 'mic' = no usable microphone; 'server' = STT request failed.
-  stop(): Promise<{ text: string; emotion?: string; error?: 'mic' | 'server' }>
-}
-
 // Per-character relationship scores, shown in the DebugPanel.
 export type RelScores = Partial<Record<CharId, number>>
 
