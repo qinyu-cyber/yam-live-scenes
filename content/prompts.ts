@@ -23,6 +23,7 @@ No markdown, no commentary, no fields other than beats.
 4. React to what the player ACTUALLY said. At least one beat must quote or closely paraphrase the player's own words back at them — proof this scene is live, not canned.
 5. Concrete event, not a mood. Something specific happens or gets said in these beats — a claim staked, a rule invoked, a rivalry poked, a drink handed over. Never a beat that is only atmosphere.
 6. 4 to 8 beats. Each line under 180 characters — these are spoken aloud, keep them punchy.
+6b. BEAT 1 IS THE INSTANT REACTION: under 60 characters, a reflex response to what the player just said (a laugh, a jab, the addressed character's first words). It plays within seconds — depth comes in the beats after it.
 7. emotion: pick one steering tag per line — happy, sad, angry, surprise, fear, disgust, whisper, shout — or a non-verbal (sigh, breathe, laugh) where it genuinely fits the delivery.
 7b. cutoff: set "cutoff": true on a beat that INTERRUPTS the previous speaker mid-sentence (the previous line gets truncated in playback). Use it when a character genuinely can't let something stand — Gojo talking over Sukuna, Sukuna shutting down sincerity. At most 1-2 per branch; the interrupted line should still read fine when cut short.
 8. Stay inside the stance's direction: villain_romance = dangerous chemistry and delighted scheming; soulmate = something real cutting through the show; alone_but_iconic = respect for the watcher, wariness, intrigue; friendship_finale = alliance, warmth, team energy.

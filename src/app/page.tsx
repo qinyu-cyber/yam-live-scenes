@@ -5,12 +5,11 @@ import type { Beat, CharId, EngineState, RelScores, SceneStreamLine, Stance } fr
 import { audioEngine, loadManifest } from '@/lib/audioEngine'
 import { VoiceLoop } from '@/lib/vad'
 import { markTurn, newTurn, currentTurn, logTable } from '@/lib/metrics'
-import { classifyStance, addressedCharacter } from '@/lib/stance'
+import { classifyStance } from '@/lib/stance'
 import Stage from '@/components/Stage'
 import TitleScreen from '@/components/TitleScreen'
 import DebugPanel from '@/components/DebugPanel'
 import { OPENING } from '../../content/openingScene'
-import { REACTION_LINES, ADDRESS_LINES } from '../../content/reactionLines'
 import { VOICES } from '../../content/voices'
 import { idToName } from '../../content/cast'
 
@@ -38,32 +37,40 @@ export default function Home() {
 
   useEffect(() => audioEngine.onStateChange(setEngineState), [])
 
-  // Play one beat: prebaked file if the manifest has it, else live streamed TTS.
-  // `cutFraction` truncates THIS beat early — used when the next beat cuts in.
-  const playBeat = useCallback(async (beat: Beat, manifestKey: string, cutFraction?: number) => {
-    setSpeaking(beat.speaker)
-    setCaption({ speaker: idToName(beat.speaker), text: beat.line })
-    const url = manifestRef.current?.[manifestKey]
-    if (url) {
-      await audioEngine.playUrl(url, cutFraction)
-    } else {
-      const voice = VOICES[beat.speaker]
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          text: beat.line,
-          voiceId: voice.voiceId,
-          emotion: beat.emotion ?? voice.defaultEmotion,
-          rate: voice.rate,
-          deliveryMode: voice.deliveryMode,
-          temperature: voice.temperature,
-        }),
-      })
-      if (res.ok) await audioEngine.playStream(res, cutFraction)
-    }
-    setSpeaking(null)
+  const fetchTts = useCallback((beat: Beat): Promise<Response> => {
+    const voice = VOICES[beat.speaker]
+    return fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        text: beat.line,
+        voiceId: voice.voiceId,
+        emotion: beat.emotion ?? voice.defaultEmotion,
+        rate: voice.rate,
+        deliveryMode: voice.deliveryMode,
+        temperature: voice.temperature,
+      }),
+    })
   }, [])
+
+  // Play one beat: prebaked file if the manifest has it, else live streamed TTS
+  // (optionally already in flight — beats prefetch while earlier ones play).
+  // `cutFraction` truncates THIS beat early — used when the next beat cuts in.
+  const playBeat = useCallback(
+    async (beat: Beat, manifestKey: string, cutFraction?: number, prefetched?: Promise<Response>) => {
+      setSpeaking(beat.speaker)
+      setCaption({ speaker: idToName(beat.speaker), text: beat.line })
+      const url = manifestRef.current?.[manifestKey]
+      if (url) {
+        await audioEngine.playUrl(url, cutFraction)
+      } else {
+        const res = await (prefetched ?? fetchTts(beat)).catch(() => null)
+        if (res?.ok) await audioEngine.playStream(res, cutFraction)
+      }
+      setSpeaking(null)
+    },
+    [fetchTts],
+  )
 
   const runTurn = useCallback(
     async (wav: Blob) => {
@@ -94,26 +101,21 @@ export default function Home() {
       }
       setCaption({ speaker: 'You', text })
 
-      // Client-side stance pick for the INSTANT reaction (latency mask) — the
-      // server recomputes with the same keywords for the authoritative record.
+      // Stance shown in the panel; the server recomputes it authoritatively.
       const localStance = classifyStance(text).stance
       markTurn('stance_done')
       setStance(localStance)
-      // If the player named someone ("Gojo, what do you think?"), THAT
-      // character acknowledges — a stance line from a bystander reads as the
-      // wrong person butting in. No name → stance-flavored reaction.
-      const target = addressedCharacter(text)
-      const lines = target ? ADDRESS_LINES[target] : REACTION_LINES[localStance]
-      const reaction = lines[text.length % lines.length]
 
-      // Fire the branch request; beats stream in while the reaction line masks.
+      // No canned mask line — the branch's own short first beat IS the
+      // reaction. Latency is attacked directly: prompt-enforced tiny beat 1,
+      // per-beat TTS prefetch, trimmed VAD tail.
       const res = await fetch('/api/scene', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ transcript: text, emotion: detected }),
       })
 
-      const beatQueue: Beat[] = []
+      const beatQueue: Array<{ beat: Beat; audio: Promise<Response> }> = []
       let streamDone = false
       const consume = (async () => {
         const reader = res.body?.getReader()
@@ -138,7 +140,13 @@ export default function Home() {
             })
           } else if (line.type === 'beat') {
             if (beatQueue.length === 0 && !streamDone) markTurn('llm_first_token')
-            beatQueue.push(line.beat)
+            // Kick off TTS immediately — audio renders while earlier beats play.
+            // (caught fallback Response keeps abandoned prefetches from
+            // becoming unhandled rejections on barge-in)
+            beatQueue.push({
+              beat: line.beat,
+              audio: fetchTts(line.beat).catch(() => new Response(null, { status: 599 })),
+            })
           } else if (line.type === 'done') {
             setBranch(line.branch)
           }
@@ -156,19 +164,24 @@ export default function Home() {
         streamDone = true
       })
 
-      audioEngine.setState('playing')
-      await playBeat(
-        { speaker: reaction.speaker, line: reaction.line, emotion: reaction.emotion },
-        `reaction_${reaction.id}`,
-      )
-
       // Play beats as they arrive; the queue drains while the stream still fills.
-      markTurn('playback_start')
+      // State stays 'thinking' until the first beat's audio is ready to go.
+      let started = false
       for (;;) {
-        if (audioEngine.getState() !== 'playing') break // barge-in mid-branch
-        const beat = beatQueue.shift()
-        if (beat) {
-          await playBeat(beat, `beat_live_${beat.speaker}`, beatQueue[0]?.cutoff ? 0.72 : undefined)
+        if (started && audioEngine.getState() !== 'playing') break // barge-in mid-branch
+        const entry = beatQueue.shift()
+        if (entry) {
+          if (!started) {
+            started = true
+            audioEngine.setState('playing')
+            markTurn('playback_start')
+          }
+          await playBeat(
+            entry.beat,
+            `beat_live_${entry.beat.speaker}`,
+            beatQueue[0]?.beat.cutoff ? 0.72 : undefined,
+            entry.audio,
+          )
           continue
         }
         if (streamDone) break

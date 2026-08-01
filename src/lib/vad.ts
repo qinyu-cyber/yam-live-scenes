@@ -11,7 +11,7 @@ const FRAME = 2048 // ~43ms at 48kHz
 const START_RMS = 0.02 // speech begins above this...
 const START_FRAMES = 4 // ...for ~170ms
 const END_RMS = 0.01 // speech ends below this...
-const END_FRAMES = 18 // ...for ~770ms
+const END_FRAMES = 13 // ...for ~560ms — snappier turn-taking
 const MIN_SPEECH_MS = 350 // discard blips shorter than this
 const PREROLL_FRAMES = 8 // ~340ms kept from before the trigger
 

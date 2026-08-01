@@ -11,25 +11,27 @@ Built in one day at the AGI House hackathon.
 The demo is honest about its latency trick — masking is a design technique, not a cheat:
 
 ```
-[title click] ──► 40s cold open ──► Gojo's question ──► YOU SPEAK
-                  (PREBAKED mp3s,                          │
-                   can never fail)                         ▼
+[title click] ──► 40s cold open ──► Gojo's question ──► YOU JUST TALK
+                  (PREBAKED mp3s,                       (always-on VAD mic;
+                   can never fail)                       speaking = barge-in)
+                                                           │
                                           transcript (LIVE Inworld STT, ~0.6s)
                                                            │
                                           stance keywords (LIVE, <5ms)
                                                            │
-                        ┌──────────────────────────────────┤
-                        ▼                                  ▼
-              instant reaction line              branch writer RACE (LIVE):
-              (PREBAKED, plays <1s —             Qwen3-32B on Tenstorrent vs
-              masks the LLM latency)             streamed Claude — first usable
-                        │                        beat wins the turn
-                        ▼                                  │
-              beats play as they stream in (LIVE Inworld TTS per line,
-              same six voices as the prebake) ◄────────────┘
+                                          branch writer RACE (LIVE):
+                                          Qwen3-32B on Tenstorrent vs streamed
+                                          Claude — first usable beat wins
+                                                           │
+              beats play as they stream in (LIVE Inworld TTS per line;
+              each beat's audio prefetches while the previous one plays) ◄┘
 ```
 
-Every spoken line — prebaked and live — uses the same Inworld voice per character, so the seam is inaudible. If both LLMs fail, a pre-authored branch for the classified stance plays instead and the panel says so.
+Everything you hear after the cold open is generated live. Latency is attacked
+directly instead of masked: the prompt forces beat 1 to be a sub-60-char reflex
+reaction (first beat ~3.5s, voiced moments later), beats stream out of the LLM
+one at a time, and TTS for beat N+1 renders while beat N plays. If both LLMs
+fail, a pre-authored branch for the classified stance plays and the panel says so.
 
 ## Measurement
 
@@ -43,8 +45,8 @@ Real numbers from live runs on the build machine (the DebugPanel shows these per
 | Stance classification (keyword tiers) | < 5 ms |
 | Stance eval accuracy (20 labeled utterances) | **20/20** |
 | Branch: Qwen3-32B on Tenstorrent, all beats | ~4.4 s |
-| Branch: Claude (streamed), first beat | ~3.1–5.1 s |
-| Perceived wait after speaking | **< 1 s** (prebaked reaction line) |
+| Branch: Claude (streamed), first beat (≤60 chars by contract) | **~3.5 s** |
+| Speech end → first live voice heard | ~4–5 s |
 
 Timestamps logged per turn: `mic_release → stt_done → stance_done → llm_first_token → tts_first_audio → playback_start` (see `src/lib/metrics.ts`, surfaced in the on-screen DebugPanel).
 
