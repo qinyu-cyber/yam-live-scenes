@@ -5,12 +5,12 @@ import type { Beat, CharId, EngineState, RelScores, SceneStreamLine, Stance } fr
 import { audioEngine, loadManifest } from '@/lib/audioEngine'
 import { VoiceLoop } from '@/lib/vad'
 import { markTurn, newTurn, currentTurn, logTable } from '@/lib/metrics'
-import { classifyStance } from '@/lib/stance'
+import { classifyStance, addressedCharacter } from '@/lib/stance'
 import Stage from '@/components/Stage'
 import TitleScreen from '@/components/TitleScreen'
 import DebugPanel from '@/components/DebugPanel'
 import { OPENING } from '../../content/openingScene'
-import { REACTION_LINES } from '../../content/reactionLines'
+import { REACTION_LINES, ADDRESS_LINES } from '../../content/reactionLines'
 import { VOICES } from '../../content/voices'
 import { idToName } from '../../content/cast'
 
@@ -99,7 +99,11 @@ export default function Home() {
       const localStance = classifyStance(text).stance
       markTurn('stance_done')
       setStance(localStance)
-      const lines = REACTION_LINES[localStance]
+      // If the player named someone ("Gojo, what do you think?"), THAT
+      // character acknowledges — a stance line from a bystander reads as the
+      // wrong person butting in. No name → stance-flavored reaction.
+      const target = addressedCharacter(text)
+      const lines = target ? ADDRESS_LINES[target] : REACTION_LINES[localStance]
       const reaction = lines[text.length % lines.length]
 
       // Fire the branch request; beats stream in while the reaction line masks.

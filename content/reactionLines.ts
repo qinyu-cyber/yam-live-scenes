@@ -93,3 +93,34 @@ export const REACTION_LINES: Record<Stance, ReactionLine[]> = {
     },
   ],
 }
+
+// When the player addresses a character BY NAME, that character acknowledges
+// instantly (instead of a stance line from someone else) while the LLM writes
+// their real answer. Short, generic enough to follow any question, and
+// unmistakably in-voice per the canon speech tells.
+export const ADDRESS_LINES: Record<CharId, ReactionLine[]> = {
+  gojo: [
+    { id: 'address_gojo_1', speaker: 'gojo', line: "Oho, asking ME? Smart. I'm the only reliable source in this villa.", emotion: 'happy' },
+    { id: 'address_gojo_2', speaker: 'gojo', line: "Careful — I always answer honestly, and nobody here can handle that.", emotion: 'happy' },
+  ],
+  sukuna: [
+    { id: 'address_sukuna_1', speaker: 'sukuna', line: 'You address me directly. Bold. Speak carefully.', emotion: 'disgust' },
+    { id: 'address_sukuna_2', speaker: 'sukuna', line: 'Hm. The brat has a question for a king. Amusing.', emotion: 'happy' },
+  ],
+  toji: [
+    { id: 'address_toji_1', speaker: 'toji', line: "Me? Heh. Depends what an honest answer pays these days.", emotion: 'whisper' },
+    { id: 'address_toji_2', speaker: 'toji', line: "You're asking the mercenary. Fine. One freebie.", emotion: 'whisper' },
+  ],
+  choso: [
+    { id: 'address_choso_1', speaker: 'choso', line: 'You have asked Choso directly. He is taking this very seriously.', emotion: 'sad' },
+    { id: 'address_choso_2', speaker: 'choso', line: 'A direct question. Choso will not waste it.', emotion: 'whisper' },
+  ],
+  nanami: [
+    { id: 'address_nanami_1', speaker: 'nanami', line: 'Noted. I will answer once, precisely, and then return to my drink.', emotion: 'sad' },
+    { id: 'address_nanami_2', speaker: 'nanami', line: 'A sensible question. Rare here. One moment.', emotion: 'sad' },
+  ],
+  geto: [
+    { id: 'address_geto_1', speaker: 'geto', line: "Asking me? I'm flattered. Let's think it through together, shall we?", emotion: 'happy' },
+    { id: 'address_geto_2', speaker: 'geto', line: 'What a lovely question. Come closer — this deserves a real answer.', emotion: 'whisper' },
+  ],
+}

@@ -9,7 +9,7 @@ import { mkdir, writeFile } from 'fs/promises'
 import path from 'path'
 import { ttsStream } from '../src/lib/inworld'
 import { OPENING } from '../content/openingScene'
-import { REACTION_LINES } from '../content/reactionLines'
+import { REACTION_LINES, ADDRESS_LINES } from '../content/reactionLines'
 import { VOICES } from '../content/voices'
 import type { Beat } from '../src/lib/types'
 
@@ -66,7 +66,7 @@ for (let i = 0; i < OPENING.beats.length; i++) {
   console.log(`opening_${i} (${OPENING.beats[i].speaker}) ${bytes} bytes`)
 }
 
-for (const lines of Object.values(REACTION_LINES)) {
+for (const lines of [...Object.values(REACTION_LINES), ...Object.values(ADDRESS_LINES)]) {
   for (const r of lines) {
     const rel = `reactions/reaction_${r.id}.mp3`
     const bytes = await bake(

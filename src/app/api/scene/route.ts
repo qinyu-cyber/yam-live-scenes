@@ -3,9 +3,10 @@ import path from 'path'
 import type { Beat, RelScores, SceneStreamLine, SceneTimings } from '@/lib/types'
 import { classifyStance, addressedCharacter } from '@/lib/stance'
 import { streamBranch } from '@/lib/llm'
-import { REACTION_LINES } from '../../../../content/reactionLines'
+import { REACTION_LINES, ADDRESS_LINES } from '../../../../content/reactionLines'
 import { PREAUTHORED_BRANCHES } from '../../../../content/branches'
 import { OPENING } from '../../../../content/openingScene'
+import { idToName } from '../../../../content/cast'
 
 export const runtime = 'nodejs'
 
@@ -31,11 +32,14 @@ export async function POST(req: Request) {
   const { stance } = classifyStance(transcript)
   const stanceMs = Date.now() - t0
 
-  const lines = REACTION_LINES[stance]
-  // Deterministic pick keyed by transcript length — stable across replays
+  // Mirrors the client's pick: an addressed character acknowledges in their
+  // own voice; otherwise a stance-flavored line. Keyed by transcript length —
+  // deterministic and stable across replays.
+  const addressed = addressedCharacter(transcript)
+  const lines = addressed ? ADDRESS_LINES[addressed] : REACTION_LINES[stance]
   const reaction = lines[transcript.length % lines.length]
 
-  const target = addressedCharacter(transcript) ?? OPENING.asker
+  const target = addressed ?? OPENING.asker
   const relDeltas: RelScores = {
     [target]: STANCE_DELTA[stance] + (emotion === 'happy' ? 1 : 0),
   }
@@ -52,10 +56,13 @@ export async function POST(req: Request) {
       let firstTokenMs: number | null = null
       let provider: 'tenstorrent' | 'claude' | undefined
       try {
-        const result = await streamBranch({ transcript, emotion, stance }, (beat) => {
-          emitted.push(beat)
-          send({ type: 'beat', beat })
-        })
+        const result = await streamBranch(
+          { transcript, emotion, stance, addressed: addressed ? idToName(addressed) : undefined },
+          (beat) => {
+            emitted.push(beat)
+            send({ type: 'beat', beat })
+          },
+        )
         firstTokenMs = result.firstTokenMs
         provider = result.provider ?? undefined
       } catch (err) {

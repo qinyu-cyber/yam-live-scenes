@@ -78,13 +78,24 @@ class BeatScanner {
 
 const client = new Anthropic({ maxRetries: 0, timeout: LLM_CEILING_MS })
 
-function buildUserPrompt(params: { transcript: string; emotion?: string; stance: Stance }): string {
+export type BranchParams = {
+  transcript: string
+  emotion?: string
+  stance: Stance
+  /** Display name of the character the player addressed by name, if any. */
+  addressed?: string
+}
+
+function buildUserPrompt(params: BranchParams): string {
   return [
     `SCENE SO FAR:\n${OPENING.sceneText}`,
     OPENING.beats.map((b) => `${b.speaker}: ${b.line}`).join('\n'),
     `\nTHE PLAYER ANSWERED (by voice): "${params.transcript}"`,
     params.emotion ? `Detected voice emotion: ${params.emotion}` : '',
     `Classified stance: ${params.stance}`,
+    params.addressed
+      ? `The player spoke DIRECTLY to ${params.addressed}. ${params.addressed} MUST speak first and actually answer what was asked; others react after.`
+      : '',
     `\nWrite the next 4-6 beats.`,
   ]
     .filter(Boolean)
@@ -127,7 +138,7 @@ async function tenstorrentBranch(userPrompt: string): Promise<Beat[]> {
 // Whichever produces the first usable beat commits the turn; the loser is
 // discarded/aborted. Either failing alone is invisible to the player.
 export async function streamBranch(
-  params: { transcript: string; emotion?: string; stance: Stance },
+  params: BranchParams,
   onBeat: (beat: Beat) => void,
 ): Promise<{
   beatCount: number
