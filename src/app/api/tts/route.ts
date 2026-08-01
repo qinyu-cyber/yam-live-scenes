@@ -3,7 +3,7 @@
 import { createHash } from 'crypto'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import path from 'path'
-import { ttsStream } from '@/lib/inworld'
+import { ttsStream, TTS_MODEL } from '@/lib/inworld'
 
 export async function POST(req: Request) {
   const { text, voiceId, emotion, rate, deliveryMode, temperature } = (await req.json()) as {
@@ -28,7 +28,9 @@ export async function POST(req: Request) {
     temperature,
   }
   const hash = createHash('sha1')
-    .update(`${fullText}|${voiceId}|${opts.rate}|${opts.deliveryMode ?? ''}|${opts.temperature ?? ''}`)
+    .update(
+      `${TTS_MODEL}|${fullText}|${voiceId}|${opts.rate}|${opts.deliveryMode ?? ''}|${opts.temperature ?? ''}`,
+    )
     .digest('hex')
   const cacheFile = path.join(process.cwd(), '.cache', 'tts', `${hash}.ndjson`)
   const ndjsonHeaders = { 'Content-Type': 'application/x-ndjson' }

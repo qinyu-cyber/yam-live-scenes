@@ -86,11 +86,16 @@ export type BranchParams = {
   addressed?: string
 }
 
-function buildUserPrompt(params: BranchParams): string {
+// Static scene context — identical every turn, so Claude caches it as a prompt
+// prefix (faster first token + cheaper) and Qwen gets it inline.
+const SCENE_CONTEXT = [
+  `SCENE SO FAR:\n${OPENING.sceneText}`,
+  OPENING.beats.map((b) => `${b.speaker}: ${b.line}`).join('\n'),
+].join('\n')
+
+function buildTurnPrompt(params: BranchParams): string {
   return [
-    `SCENE SO FAR:\n${OPENING.sceneText}`,
-    OPENING.beats.map((b) => `${b.speaker}: ${b.line}`).join('\n'),
-    `\nTHE PLAYER ANSWERED (by voice): "${params.transcript}"`,
+    `THE PLAYER ANSWERED (by voice): "${params.transcript}"`,
     params.emotion ? `Detected voice emotion: ${params.emotion}` : '',
     `Classified stance: ${params.stance}`,
     params.addressed
@@ -115,7 +120,7 @@ async function tenstorrentBranch(userPrompt: string): Promise<Beat[]> {
       max_tokens: 1200,
       chat_template_kwargs: { enable_thinking: false },
       messages: [
-        { role: 'system', content: BRANCH_SYSTEM_PROMPT },
+        { role: 'system', content: `${BRANCH_SYSTEM_PROMPT}\n\n${SCENE_CONTEXT}` },
         { role: 'user', content: `${userPrompt} /no_think` },
       ],
     }),
@@ -150,7 +155,7 @@ export async function streamBranch(
   let firstTokenMs: number | null = null
   let beatCount = 0
   let committed: 'tenstorrent' | 'claude' | null = null
-  const userPrompt = buildUserPrompt(params)
+  const userPrompt = buildTurnPrompt(params)
 
   const stream = client.messages.stream({
     model: 'claude-opus-5',
@@ -160,7 +165,14 @@ export async function streamBranch(
       effort: 'low',
       format: { type: 'json_schema', schema: BEATS_SCHEMA },
     },
-    system: BRANCH_SYSTEM_PROMPT,
+    // Everything static rides in a cached prefix; only the turn varies.
+    system: [
+      {
+        type: 'text',
+        text: `${BRANCH_SYSTEM_PROMPT}\n\n${SCENE_CONTEXT}`,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
     messages: [{ role: 'user', content: userPrompt }],
   })
 

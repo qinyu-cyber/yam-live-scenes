@@ -107,16 +107,31 @@ class AudioEngine {
     await this.playBuffer(audio, cutFraction)
   }
 
+  // Decoded-audio store: any line played once (prebaked or repeated) replays
+  // instantly with zero fetch/decode. Bounded FIFO so memory stays sane.
+  private bufferCache = new Map<string, AudioBuffer>()
+  private cachePut(key: string, audio: AudioBuffer): void {
+    if (this.bufferCache.size >= 64) {
+      const oldest = this.bufferCache.keys().next().value
+      if (oldest) this.bufferCache.delete(oldest)
+    }
+    this.bufferCache.set(key, audio)
+  }
+
   // Prebaked mp3 playback: fetch → decode → play; resolves when it ends.
   // `cutFraction` (0..1) truncates playback — the next speaker cuts this one off.
   async playUrl(url: string, cutFraction?: number): Promise<void> {
     const ctx = this.ctx
     if (!ctx) return
     const gen = this.gen
-    const res = await fetch(url)
-    const data = await res.arrayBuffer()
-    if (this.gen !== gen) return
-    const audio = await ctx.decodeAudioData(data)
+    let audio = this.bufferCache.get(url)
+    if (!audio) {
+      const res = await fetch(url)
+      const data = await res.arrayBuffer()
+      if (this.gen !== gen) return
+      audio = await ctx.decodeAudioData(data)
+      this.cachePut(url, audio)
+    }
     if (this.gen !== gen) return
     await this.playBuffer(audio, cutFraction)
   }

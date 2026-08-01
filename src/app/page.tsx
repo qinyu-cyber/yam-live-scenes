@@ -239,6 +239,9 @@ export default function Home() {
 
     setEntered(true)
     setNarration(OPENING.sceneText)
+    // Pre-warm the LLM prompt cache while the cold open plays, so the
+    // player's FIRST answer gets warm-cache latency (~2.5s, not ~6s).
+    void fetch('/api/scene').catch(() => {})
     audioEngine.setState('playing')
     // The authored cold open. Speech is ignored until Gojo's question lands.
     for (let i = 0; i < OPENING.beats.length; i++) {

@@ -10,6 +10,21 @@ import { idToName } from '../../../../content/cast'
 
 export const runtime = 'nodejs'
 
+// GET = cache pre-warm, fired by the client during the cold open. Runs one
+// throwaway branch so Claude's prompt-prefix cache and the schema compile are
+// hot before the player's first real answer. Not logged to the dataset.
+export async function GET() {
+  try {
+    await streamBranch(
+      { transcript: '(warmup — ignore)', stance: 'villain_romance' },
+      () => {},
+    )
+  } catch {
+    // warmup is best-effort
+  }
+  return new Response(null, { status: 204 })
+}
+
 // Small relationship delta on the character the player addressed (or the
 // asker), shaped by stance + detected voice emotion. Yam castDeltas, simplified.
 const STANCE_DELTA: Record<string, number> = {

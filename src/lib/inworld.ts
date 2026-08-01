@@ -12,6 +12,10 @@
 const BASE = 'https://api.inworld.ai'
 const BACKOFF_MS = [0, 1000, 3000] // attempt 1 immediate, then 1s, then 3s
 
+// Flagship model — measured on the direct API: ~220ms TTFB, ~1s total per line
+// (our 6 voices all exist on it; the slow inworld-tts-2 was Tenstorrent's mirror).
+export const TTS_MODEL = 'inworld-tts-2'
+
 function authHeader(): string {
   const key = process.env.INWORLD_API_KEY
   if (!key) throw new Error('INWORLD_API_KEY is not set')
@@ -56,7 +60,7 @@ export function ttsStream(text: string, voiceId: string, opts: TtsOpts = {}): Pr
     body: JSON.stringify({
       text,
       voiceId,
-      modelId: 'inworld-tts-1',
+      modelId: TTS_MODEL,
       ...(opts.deliveryMode ? { deliveryMode: opts.deliveryMode } : {}),
       ...(opts.temperature ? { temperature: Math.min(2, Math.max(0.1, opts.temperature)) } : {}),
       audioConfig: {
