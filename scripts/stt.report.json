@@ -1,4 +1,12 @@
 {
-  "status": "deferred - no .env",
-  "notes": "INWORLD_API_KEY missing"
+  "status": "ok",
+  "roundtripMs": 620,
+  "transcriptMatches": true,
+  "emotionField": "voiceProfile",
+  "webmOpus": "untested",
+  "notes": [
+    "response top-level keys: transcription,usage",
+    "transcription keys: transcript,isFinal,wordTimestamps,voiceProfile,silenceDurationMs",
+    "transcript: \" Well, well, look who finally showed up to the party.\""
+  ]
 }

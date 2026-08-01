@@ -37,4 +37,9 @@ export type SceneTimings = {
 export type SceneStreamLine =
   | { type: 'meta'; stance: Stance; reactionLineId: string; relDeltas: RelScores }
   | { type: 'beat'; beat: Beat }
-  | { type: 'done'; branch: 'live' | 'preauthored'; timings: SceneTimings }
+  | {
+      type: 'done'
+      branch: 'live' | 'preauthored'
+      provider?: 'tenstorrent' | 'claude'
+      timings: SceneTimings
+    }

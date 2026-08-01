@@ -1,4 +1,46 @@
 {
-  "status": "deferred - no .env",
-  "notes": "INWORLD_API_KEY missing; wrote no fixtures"
+  "status": "ok",
+  "ttfbMs": 196,
+  "totalMs": 365,
+  "chunkShape": "result.audioContent",
+  "chunkCount": 8,
+  "steeringTagsRendered": "unknown",
+  "voices": {
+    "gojo": {
+      "id": "Abby",
+      "name": "Abby"
+    },
+    "sukuna": {
+      "id": "Dominus",
+      "name": "Dominus"
+    },
+    "toji": {
+      "id": "Grant",
+      "name": "Grant"
+    },
+    "choso": {
+      "id": "Serena",
+      "name": "Serena"
+    },
+    "nanami": {
+      "id": "Bianca",
+      "name": "Bianca"
+    },
+    "geto": {
+      "id": "Dennis",
+      "name": "Dennis"
+    }
+  },
+  "notes": [
+    "voices endpoint OK: GET /tts/v1/voices returned 269 voices",
+    "streamed test voice: Abby",
+    "chunk 2 header not audio-like: c0000c00",
+    "chunk 3 header not audio-like: 7591be18",
+    "chunk 4 header not audio-like: 74563051",
+    "chunk 5 header not audio-like: 80200100",
+    "chunk 6 header not audio-like: 020000a3",
+    "chunk 7 header not audio-like: 80000140",
+    "chunk 8 header not audio-like: 4c414d45",
+    "saved fixtures/sample.mp3 (51456 bytes)"
+  ]
 }

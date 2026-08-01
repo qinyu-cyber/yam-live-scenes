@@ -10,7 +10,8 @@
     "smoke:tts": "bun scripts/smoke-tts.ts",
     "smoke:stt": "bun scripts/smoke-stt.ts",
     "probe:tt": "bun scripts/probe-tenstorrent.ts",
-    "eval:stance": "bun scripts/eval-stance.ts"
+    "eval:stance": "bun scripts/eval-stance.ts",
+    "prebake": "bun scripts/prebake-opening.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",

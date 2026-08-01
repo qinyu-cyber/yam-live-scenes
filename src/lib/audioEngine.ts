@@ -57,9 +57,11 @@ class AudioEngine {
     return this.micStream
   }
 
-  // Streamed TTS playback: NDJSON lines, each carrying a base64 mp3 chunk that is
-  // independently decodable. Decode per chunk, schedule back-to-back. If a chunk
-  // fails to decode, accumulate it with subsequent chunks and retry the concatenation.
+  // Streamed TTS playback. The NDJSON chunks are contiguous slices of ONE mp3
+  // stream (verified by smoke-tts: only chunk 1 carries the header), so they
+  // are NOT independently decodable — accumulate every chunk, decode once,
+  // play. The whole stream arrives in well under a second, so the cost over
+  // progressive decoding is negligible.
   async playStream(res: Response): Promise<void> {
     const ctx = this.ctx
     if (!ctx || !res.body) return
@@ -67,38 +69,14 @@ class AudioEngine {
     const reader = res.body.getReader()
     const textDecoder = new TextDecoder()
     let buf = ''
-    let pending: Uint8Array[] = [] // undecodable chunks awaiting more data
-    let nextStartTime = 0
-    let lastNode: AudioBufferSourceNode | null = null
+    const parts: Uint8Array[] = []
 
-    const schedule = (audio: AudioBuffer) => {
-      const src = ctx.createBufferSource()
-      src.buffer = audio
-      src.connect(ctx.destination)
-      const t = Math.max(ctx.currentTime, nextStartTime)
-      src.start(t)
-      nextStartTime = t + audio.duration
-      this.nodes.push(src)
-      lastNode = src
-    }
-
-    const tryDecode = async (bytes: Uint8Array) => {
-      const data = concatBytes([...pending, bytes])
-      try {
-        const audio = await ctx.decodeAudioData(data)
-        pending = []
-        if (this.gen === gen) schedule(audio)
-      } catch {
-        pending.push(bytes) // degrade path: retry with the next chunk appended
-      }
-    }
-
-    const handleLine = async (line: string) => {
+    const handleLine = (line: string) => {
       if (!line.trim()) return
       try {
         const parsed = JSON.parse(line)
         const b64 = parsed.result?.audioContent ?? parsed.audioContent
-        if (typeof b64 === 'string' && b64) await tryDecode(b64ToBytes(b64))
+        if (typeof b64 === 'string' && b64) parts.push(b64ToBytes(b64))
       } catch {
         // partial/bad JSON line — skip
       }
@@ -114,14 +92,26 @@ class AudioEngine {
       buf += textDecoder.decode(value, { stream: true })
       const lines = buf.split('\n')
       buf = lines.pop() ?? ''
-      for (const line of lines) await handleLine(line)
+      for (const line of lines) handleLine(line)
     }
-    await handleLine(buf)
+    handleLine(buf)
 
-    if (this.gen !== gen || !lastNode) return
+    if (this.gen !== gen || parts.length === 0) return
+    let audio: AudioBuffer
+    try {
+      audio = await ctx.decodeAudioData(concatBytes(parts))
+    } catch {
+      return // undecodable audio — skip the line rather than crash the scene
+    }
+    if (this.gen !== gen) return
+    const src = ctx.createBufferSource()
+    src.buffer = audio
+    src.connect(ctx.destination)
+    this.nodes.push(src)
     await new Promise<void>((resolve) => {
       this.endResolve = resolve
-      ;(lastNode as AudioBufferSourceNode).onended = () => resolve()
+      src.onended = () => resolve()
+      src.start()
     })
     this.endResolve = null
   }

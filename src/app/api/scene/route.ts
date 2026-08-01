@@ -50,12 +50,14 @@ export async function POST(req: Request) {
 
       const emitted: Beat[] = []
       let firstTokenMs: number | null = null
+      let provider: 'tenstorrent' | 'claude' | undefined
       try {
         const result = await streamBranch({ transcript, emotion, stance }, (beat) => {
           emitted.push(beat)
           send({ type: 'beat', beat })
         })
         firstTokenMs = result.firstTokenMs
+        provider = result.provider ?? undefined
       } catch (err) {
         console.error('[scene] branch stream failed:', err)
       }
@@ -74,7 +76,7 @@ export async function POST(req: Request) {
         llmFirstTokenMs: firstTokenMs ?? undefined,
         totalMs: Date.now() - t0,
       }
-      send({ type: 'done', branch, timings })
+      send({ type: 'done', branch, provider, timings })
       controller.close()
 
       // Turn dataset (eval/harness/dataset loop) — gitignored jsonl
@@ -91,6 +93,7 @@ export async function POST(req: Request) {
             reactionLineId: reaction.id,
             relDeltas,
             branch,
+            provider,
             beats: emitted,
             timings,
           }) + '\n',

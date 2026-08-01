@@ -77,15 +77,8 @@ class BeatScanner {
 
 const client = new Anthropic({ maxRetries: 0, timeout: LLM_CEILING_MS })
 
-export async function streamBranch(
-  params: { transcript: string; emotion?: string; stance: Stance },
-  onBeat: (beat: Beat) => void,
-): Promise<{ beatCount: number; firstTokenMs: number | null; totalMs: number }> {
-  const start = Date.now()
-  let firstTokenMs: number | null = null
-  let beatCount = 0
-
-  const userPrompt = [
+function buildUserPrompt(params: { transcript: string; emotion?: string; stance: Stance }): string {
+  return [
     `SCENE SO FAR:\n${OPENING.sceneText}`,
     OPENING.beats.map((b) => `${b.speaker}: ${b.line}`).join('\n'),
     `\nTHE PLAYER ANSWERED (by voice): "${params.transcript}"`,
@@ -95,14 +88,57 @@ export async function streamBranch(
   ]
     .filter(Boolean)
     .join('\n')
+}
 
-  const scanner = new BeatScanner((obj) => {
-    const [beat] = sanitizeBeats([obj])
-    if (beat) {
-      beatCount++
-      onBeat(beat)
-    }
+// Tenstorrent-hosted Qwen3-32B (probe: chat endpoint live, ~1.6s). Non-streaming;
+// Qwen may wrap output in <think> blocks or code fences — strip and extract JSON.
+async function tenstorrentBranch(userPrompt: string): Promise<Beat[]> {
+  const key = process.env.TENSTORRENT_API_KEY
+  if (!key) throw new Error('TENSTORRENT_API_KEY not set')
+  const res = await fetch('https://console.tenstorrent.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'Qwen/Qwen3-32B',
+      max_tokens: 1200,
+      chat_template_kwargs: { enable_thinking: false },
+      messages: [
+        { role: 'system', content: BRANCH_SYSTEM_PROMPT },
+        { role: 'user', content: `${userPrompt} /no_think` },
+      ],
+    }),
+    signal: AbortSignal.timeout(6000),
   })
+  if (!res.ok) throw new Error(`Tenstorrent ${res.status}`)
+  const json = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
+  const raw = (json.choices?.[0]?.message?.content ?? '')
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .trim()
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start < 0 || end <= start) throw new Error('no JSON in Tenstorrent reply')
+  const beats = sanitizeBeats(JSON.parse(raw.slice(start, end + 1)))
+  if (beats.length < 2) throw new Error(`too few beats: ${beats.length}`)
+  return beats
+}
+
+// Race: Tenstorrent (fast, all-at-once) vs Claude (streamed beat-by-beat).
+// Whichever produces the first usable beat commits the turn; the loser is
+// discarded/aborted. Either failing alone is invisible to the player.
+export async function streamBranch(
+  params: { transcript: string; emotion?: string; stance: Stance },
+  onBeat: (beat: Beat) => void,
+): Promise<{
+  beatCount: number
+  firstTokenMs: number | null
+  totalMs: number
+  provider: 'tenstorrent' | 'claude' | null
+}> {
+  const start = Date.now()
+  let firstTokenMs: number | null = null
+  let beatCount = 0
+  let committed: 'tenstorrent' | 'claude' | null = null
+  const userPrompt = buildUserPrompt(params)
 
   const stream = client.messages.stream({
     model: 'claude-opus-5',
@@ -116,11 +152,41 @@ export async function streamBranch(
     messages: [{ role: 'user', content: userPrompt }],
   })
 
+  const scanner = new BeatScanner((obj) => {
+    if (committed === 'tenstorrent') return
+    const [beat] = sanitizeBeats([obj])
+    if (beat) {
+      committed = 'claude'
+      beatCount++
+      onBeat(beat)
+    }
+  })
+
   stream.on('text', (delta) => {
     if (firstTokenMs === null) firstTokenMs = Date.now() - start
     scanner.push(delta)
   })
 
-  await stream.finalMessage()
-  return { beatCount, firstTokenMs, totalMs: Date.now() - start }
+  const claudeDone = stream
+    .finalMessage()
+    .then(() => {})
+    .catch((err) => {
+      if (committed !== 'tenstorrent') console.error('[llm] claude failed:', err)
+    })
+
+  const ttDone = tenstorrentBranch(userPrompt)
+    .then((beats) => {
+      if (committed !== null) return // Claude already speaking — discard
+      committed = 'tenstorrent'
+      if (firstTokenMs === null) firstTokenMs = Date.now() - start
+      for (const beat of beats) {
+        beatCount++
+        onBeat(beat)
+      }
+      stream.controller.abort()
+    })
+    .catch((err) => console.warn('[llm] tenstorrent lost the race:', String(err).slice(0, 120)))
+
+  await Promise.allSettled([claudeDone, ttDone])
+  return { beatCount, firstTokenMs, totalMs: Date.now() - start, provider: committed }
 }

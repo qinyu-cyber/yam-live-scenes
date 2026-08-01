@@ -76,10 +76,18 @@ export async function sttBatch(
     }),
   })
   const json = (await res.json()) as {
-    transcription?: { transcript?: string; emotion?: string }
-    emotion?: string
+    transcription?: {
+      transcript?: string
+      // Present in responses (null for synthetic audio); shape undocumented —
+      // extract an emotion-ish string opportunistically.
+      voiceProfile?: string | { emotion?: string; mood?: string } | null
+    }
   }
-  const text = json.transcription?.transcript ?? ''
-  const emotion = json.transcription?.emotion ?? json.emotion
+  const text = (json.transcription?.transcript ?? '').trim()
+  const profile = json.transcription?.voiceProfile
+  const emotion =
+    typeof profile === 'string'
+      ? profile
+      : profile?.emotion ?? profile?.mood ?? undefined
   return emotion ? { text, emotion } : { text }
 }

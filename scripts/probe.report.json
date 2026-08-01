@@ -1,4 +1,16 @@
 {
-  "status": "deferred - no .env",
-  "notes": "TENSTORRENT_API_KEY missing"
+  "status": "failed",
+  "ttsVoices": [],
+  "ttsLatencyMs": -1,
+  "chatEndpoint": "present",
+  "chatLatencyMs": 1599,
+  "chatJsonReliable": false,
+  "notes": [
+    "voices OK (0)",
+    "speech failed: Error: 400 {\"error\":{\"message\":\"Voice 'Ashton' not found. Available voices: ['Szymon', 'Alex', 'Ashley', 'Xiaoyin', 'Yichen', 'Satoshi', 'Minji', 'Alain', 'Diego', 'Katrien']...(14 total)\",\"type\":\"invalid_request_error\",\"code\":\"400\"}}",
+    "models: Qwen/Qwen3-32B, Qwen/Qwen3-VL-32B-Instruct",
+    "chat probe 0: non-JSON content: <think>\nOkay, the user wants me to reply with only the JSON {\"ok\": true, \"n\": 0} and no prose. Let m",
+    "chat probe 1: non-JSON content: <think>\nOkay, the user wants me to reply with only the JSON {\"ok\": true, \"n\": 1} and no prose. Let m",
+    "chat probe 2: non-JSON content: <think>\nOkay, the user wants me to reply with only the JSON {\"ok\": true, \"n\": 2} and no prose. Let m"
+  ]
 }
