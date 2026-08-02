@@ -1,6 +1,7 @@
 import { appendFile, mkdir } from 'fs/promises'
 import path from 'path'
-import type { Beat, RelScores, SceneStreamLine, SceneTimings } from '@/lib/types'
+import type { Beat, HistoryEntry, RelScores, SceneStreamLine, SceneTimings } from '@/lib/types'
+import { NAME_TO_ID } from '../../../../content/cast'
 import { classifyStance, addressedCharacter } from '@/lib/stance'
 import { streamBranch } from '@/lib/llm'
 import { REACTION_LINES, ADDRESS_LINES } from '../../../../content/reactionLines'
@@ -45,13 +46,37 @@ function emotionDelta(emotion: string | undefined, stance: string): number {
   return 0
 }
 
+// Defensive clamp on client-supplied history: known speakers only, capped
+// lengths, most recent 20 entries.
+function sanitizeHistory(raw: unknown): HistoryEntry[] {
+  if (!Array.isArray(raw)) return []
+  const out: HistoryEntry[] = []
+  for (const entry of raw.slice(-20)) {
+    if (typeof entry !== 'object' || entry === null) continue
+    const rec = entry as Record<string, unknown>
+    const who = rec.who === 'player' ? 'player' : NAME_TO_ID[String(rec.who ?? '').toLowerCase()]
+    const text = typeof rec.text === 'string' ? rec.text.trim().slice(0, 300) : ''
+    if (!who || !text) continue
+    out.push({
+      who,
+      text,
+      ...(rec.cut === true ? { cut: true } : {}),
+      ...(typeof rec.emotion === 'string' ? { emotion: rec.emotion.slice(0, 40) } : {}),
+    })
+  }
+  return out
+}
+
 export async function POST(req: Request) {
   const t0 = Date.now()
-  const { transcript, emotion, vocalStyle } = (await req.json()) as {
+  const body = (await req.json()) as {
     transcript: string
     emotion?: string
     vocalStyle?: string
+    history?: unknown
   }
+  const { transcript, emotion, vocalStyle } = body
+  const history = sanitizeHistory(body.history)
   if (!transcript?.trim()) {
     return Response.json({ error: 'empty transcript' }, { status: 400 })
   }
@@ -90,6 +115,7 @@ export async function POST(req: Request) {
             vocalStyle,
             stance,
             addressed: addressed ? idToName(addressed) : undefined,
+            history,
           },
           (beat) => {
             emitted.push(beat)

@@ -16,6 +16,15 @@ export type Stance =
 
 export type EngineState = 'idle' | 'playing' | 'listening' | 'thinking'
 
+// One heard line of post-opening conversation — the client owns this because
+// only it knows what actually PLAYED (barge-in drops queued beats unheard).
+export type HistoryEntry = {
+  who: 'player' | CharId
+  text: string
+  cut?: boolean // the player barged in mid-line
+  emotion?: string // player's detected voice emotion, when known
+}
+
 // Per-character relationship scores, shown in the DebugPanel.
 export type RelScores = Partial<Record<CharId, number>>
 

@@ -1,7 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Beat, CharId, EngineState, RelScores, SceneStreamLine, Stance } from '@/lib/types'
+import type {
+  Beat,
+  CharId,
+  EngineState,
+  HistoryEntry,
+  RelScores,
+  SceneStreamLine,
+  Stance,
+} from '@/lib/types'
 import { audioEngine, loadManifest } from '@/lib/audioEngine'
 import { VoiceLoop } from '@/lib/vad'
 import { SttStreamTurn } from '@/lib/sttStream'
@@ -31,6 +39,9 @@ export default function Home() {
   const [openingDone, setOpeningDone] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
   const manifestRef = useRef<Record<string, string> | null>(null)
+  // Post-opening conversation as actually HEARD — beats are appended only
+  // after they play; a barged-in beat is marked cut; dropped beats never enter.
+  const historyRef = useRef<HistoryEntry[]>([])
   const openingDoneRef = useRef(false)
   const turnInFlightRef = useRef(false)
   const pendingWavRef = useRef<Blob | null>(null)
@@ -107,6 +118,9 @@ export default function Home() {
       }
       markTurn('stt_done')
       setEmotion(detected ? `${detected}${vocalStyle ? ` (${vocalStyle})` : ''}` : null)
+      if (text) {
+        historyRef.current.push({ who: 'player', text, ...(detected ? { emotion: detected } : {}) })
+      }
       if (!text) {
         setCaption({ text: "(didn't catch that — say it again?)" })
         audioEngine.setState('listening')
@@ -126,7 +140,13 @@ export default function Home() {
       const res = await fetch('/api/scene', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ transcript: text, emotion: detected, vocalStyle }),
+        body: JSON.stringify({
+          transcript: text,
+          emotion: detected,
+          vocalStyle,
+          // everything before this utterance (it's already the transcript)
+          history: historyRef.current.slice(0, -1).slice(-20),
+        }),
       })
 
       const beatQueue: Array<{ beat: Beat; audio: Promise<Response> }> = []
@@ -196,6 +216,12 @@ export default function Home() {
             beatQueue[0]?.beat.cutoff ? 0.72 : undefined,
             entry.audio,
           )
+          // Heard (or barged into mid-line) — record it either way.
+          historyRef.current.push({
+            who: entry.beat.speaker,
+            text: entry.beat.line,
+            ...(audioEngine.getState() !== 'playing' ? { cut: true } : {}),
+          })
           continue
         }
         if (streamDone) break

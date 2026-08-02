@@ -6,7 +6,8 @@
 // pre-authored branch for the stance.
 
 import Anthropic from '@anthropic-ai/sdk'
-import type { Beat, Stance } from './types'
+import type { Beat, HistoryEntry, Stance } from './types'
+import { idToName } from '../../content/cast'
 import { BRANCH_SYSTEM_PROMPT } from '../../content/prompts'
 import { OPENING } from '../../content/openingScene'
 import { sanitizeBeats } from '../../content/sanitize'
@@ -85,6 +86,18 @@ export type BranchParams = {
   stance: Stance
   /** Display name of the character the player addressed by name, if any. */
   addressed?: string
+  /** Post-opening conversation as actually heard (client-tracked). */
+  history?: HistoryEntry[]
+}
+
+function formatHistory(history: HistoryEntry[] | undefined): string {
+  if (!history?.length) return ''
+  const lines = history.map((h) => {
+    const who = h.who === 'player' ? 'PLAYER' : idToName(h.who)
+    const voice = h.who === 'player' && h.emotion ? ` [voice: ${h.emotion}]` : ''
+    return `${who}${voice}: ${h.text}${h.cut ? ' (cut off by the player)' : ''}`
+  })
+  return `CONVERSATION SINCE THE OPENING (everyone heard all of this):\n${lines.join('\n')}`
 }
 
 // Static scene context — identical every turn, so Claude caches it as a prompt
@@ -96,7 +109,8 @@ const SCENE_CONTEXT = [
 
 function buildTurnPrompt(params: BranchParams): string {
   return [
-    `THE PLAYER ANSWERED (by voice): "${params.transcript}"`,
+    formatHistory(params.history),
+    `THE PLAYER JUST SAID (by voice): "${params.transcript}"`,
     params.emotion || params.vocalStyle
       ? `Their VOICE sounded: ${[params.emotion, params.vocalStyle].filter(Boolean).join(', ')} — apply the voice-shapes-the-room rule.`
       : '',

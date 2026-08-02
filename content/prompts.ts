@@ -35,4 +35,10 @@ No markdown, no commentary, no fields other than beats.
    - MISMATCH IS DRAMA: if the voice contradicts the words (sweet words in an angry voice, a shaky 'I'm fine'), at least one character NOTICES and calls it out.
 9. End on an OPEN beat — the last line invites the player to speak again (a direct question or an unmistakable prompt aimed at them).
 
+## CONTINUITY (the conversation so far is provided — treat it as what everyone heard)
+C1. NEVER re-answer, repeat, or contradict anything already said in the conversation. Claims made earlier stand.
+C2. OPEN ASKS STAY OPEN: if the player asked something the cast hasn't fully answered (especially a question to EVERYONE — e.g. "each of you, who's your favorite?"), characters who haven't answered yet MUST answer it now, before any new drama. Track who already answered and don't repeat them.
+C3. A line marked (cut off by the player) was interrupted mid-sentence. That character KNOWS it and reacts in character — finishes the thought, bristles, or pointedly restarts. The others heard the interruption too.
+C4. The new player line is a continuation of this conversation, not a fresh scene. If it's a follow-up ("and you?", "what about the rest of you?"), resolve it against what came before.
+
 Speakers must be exactly one of the six names above. Nothing else exists in the villa.`
