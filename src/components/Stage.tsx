@@ -80,11 +80,15 @@ export default function Stage({
 
       {/* Standee row: full-height cutouts on one ground line at the bottom of
           the backdrop; the dialogue card overlays their legs, VN-style. */}
-      <div className="absolute inset-x-0 bottom-0 flex h-[85vh] items-end justify-center gap-1 px-4 sm:gap-3">
+      <div className="absolute inset-x-0 bottom-0 flex h-[85vh] items-end justify-center px-4">
         {CAST_ORDER.map((id) => (
+          // Equal columns; the figure inside renders at FULL row height and may
+          // overlap neighbors (wide art like Sukuna's). Speaker stacks on top.
           <div
             key={id}
-            className={`h-full ${onPortraitSelect ? 'cursor-pointer' : ''}`}
+            className={`relative flex h-full min-w-0 flex-1 items-end justify-center ${
+              speaking === id ? 'z-10' : ''
+            } ${onPortraitSelect ? 'cursor-pointer' : ''}`}
             onClick={() => onPortraitSelect?.(id)}
             title={onPortraitSelect ? `private call with ${CAST_UI[id].name}` : undefined}
           >
@@ -99,13 +103,11 @@ export default function Stage({
         ))}
       </div>
 
-      {/* Dialogue card, bottom-center. */}
-      <div className="absolute inset-x-0 bottom-6">
+      {/* Status pills stacked ABOVE the dialogue card — they can never overlap it. */}
+      <div className="absolute inset-x-0 bottom-6 z-20 flex flex-col items-center gap-3">
+        <div className="flex justify-center">{children}</div>
         <Captions caption={caption} progress={progress} />
       </div>
-
-      {/* Conversation status slot, bottom-center above the captions. */}
-      <div className="absolute inset-x-0 bottom-32 flex justify-center">{children}</div>
 
       {/* Slot for DebugPanel. */}
       {debug}

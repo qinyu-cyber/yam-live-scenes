@@ -38,7 +38,7 @@ export default function Portrait({ id, name, accent, speaking, dimmed }: Portrai
         <img
           src={`/images/portraits/${id}.png`}
           alt={name}
-          className="h-full w-auto object-contain object-bottom transition-[filter] duration-300"
+          className="h-full w-auto max-w-none object-contain object-bottom transition-[filter] duration-300"
           style={{
             filter: speaking
               ? `drop-shadow(0 0 20px ${accent}aa) drop-shadow(0 0 56px ${accent}55)`
