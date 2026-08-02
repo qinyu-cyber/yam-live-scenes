@@ -267,8 +267,9 @@ export default function Home() {
     void fetch('/api/scene').catch(() => {})
     audioEngine.setState('playing')
     // The authored cold open. Speech is ignored until Gojo's question lands.
+    // Skip (or any stop) breaks the loop but still lands on the question.
     for (let i = 0; i < OPENING.beats.length; i++) {
-      if (audioEngine.getState() !== 'playing') return
+      if (audioEngine.getState() !== 'playing') break
       const next = OPENING.beats[i + 1]
       await playBeat(OPENING.beats[i], `opening_${i}`, next?.cutoff ? 0.72 : undefined)
     }
@@ -280,6 +281,11 @@ export default function Home() {
   }, [playBeat, runTurn])
 
   useEffect(() => () => voiceLoopRef.current?.stop(), [])
+
+  const skipOpening = useCallback(() => {
+    audioEngine.stop() // breaks the opening loop; its tail lands on the question
+    audioEngine.setState('listening')
+  }, [])
 
   if (!entered) return <TitleScreen onEnter={enterVilla} />
 
@@ -299,6 +305,15 @@ export default function Home() {
         />
       }
     >
+      {/* Skip the cold open (testing / repeat runs). */}
+      {!openingDone && (
+        <button
+          onClick={skipOpening}
+          className="pointer-events-auto mr-3 rounded-full border border-white/20 bg-black/50 px-3 py-1 text-xs text-white/70 backdrop-blur hover:bg-black/70"
+        >
+          skip intro ⏭
+        </button>
+      )}
       {/* Conversation status pill — replaces the old hold-to-talk button.
           The dot doubles as a live mic level meter so you can SEE that the
           villa hears you. */}
