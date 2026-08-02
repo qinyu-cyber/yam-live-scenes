@@ -218,7 +218,9 @@ export async function streamBranch(
       method: 'POST',
       headers: { Authorization: `Basic ${key}`, 'content-type': 'application/json' },
       body: JSON.stringify({
-        model: 'openai/gpt-4o-mini',
+        // gemini-3.1-flash is the preferred lane but is billing-gated on the
+        // Inworld plan — set INWORLD_ROUTER_MODEL once billing is enabled.
+        model: process.env.INWORLD_ROUTER_MODEL ?? 'openai/gpt-4o-mini',
         stream: true,
         max_tokens: 900, // plan-capped at 1000
         response_format: { type: 'json_object' },
