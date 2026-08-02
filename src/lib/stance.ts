@@ -5,12 +5,13 @@ import type { CharId, Stance } from './types'
 import { CAST } from '../../content/cast'
 
 // Ordered keyword tiers; first hit wins. Fallback keeps the show moving in
-// the most dramatic direction.
+// the most dramatic direction. Word-bounded — unanchored substrings misfired
+// ("totALLY" matched ally, "reALly" matched real).
 const TIERS: Array<[RegExp, Stance]> = [
-  [/hot|steal|drama|burn|chaos|villain|fire/, 'villain_romance'],
-  [/love|real|soulmate|worth|heart|marry/, 'soulmate'],
-  [/friend|cool|chill|nice|vibe|ally|allies/, 'friendship_finale'],
-  [/watch|wait|observe|quiet|strike|mysterious/, 'alone_but_iconic'],
+  [/\b(hot|steal|drama|burn|chaos|villain|fire)\b/, 'villain_romance'],
+  [/\b(love|real|soulmate|worth|heart|marry)\b/, 'soulmate'],
+  [/\b(friend|friends|cool|chill|nice|vibe|vibes|ally|allies)\b/, 'friendship_finale'],
+  [/\b(watch|wait|observe|quiet|strike|mysterious)\b/, 'alone_but_iconic'],
 ]
 
 export function classifyStance(reply: string): { stance: Stance; matched: 'keyword' | 'fallback' } {

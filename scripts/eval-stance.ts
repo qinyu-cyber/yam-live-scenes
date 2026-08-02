@@ -23,6 +23,10 @@ const LABELED: Array<[string, Stance]> = [
   ['You all seem cool, let’s just chill', 'friendship_finale'],
   ['Allies first, romance later maybe', 'friendship_finale'],
   ["I'm everyone's friend until the finale", 'friendship_finale'],
+  // substring-misfire regressions: 'totally'/'really' must NOT hit ally/real,
+  // so these keyword-free lines fall back to villain_romance
+  ['I said I am totally fine, do not worry about me', 'villain_romance'],
+  ['I really do not know yet', 'villain_romance'],
   // alone_but_iconic
   ["I'll just watch and wait", 'alone_but_iconic'],
   ["I'm here to observe before I strike", 'alone_but_iconic'],

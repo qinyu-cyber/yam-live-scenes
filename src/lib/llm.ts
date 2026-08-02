@@ -81,6 +81,7 @@ const client = new Anthropic({ maxRetries: 0, timeout: LLM_CEILING_MS })
 export type BranchParams = {
   transcript: string
   emotion?: string
+  vocalStyle?: string
   stance: Stance
   /** Display name of the character the player addressed by name, if any. */
   addressed?: string
@@ -96,7 +97,9 @@ const SCENE_CONTEXT = [
 function buildTurnPrompt(params: BranchParams): string {
   return [
     `THE PLAYER ANSWERED (by voice): "${params.transcript}"`,
-    params.emotion ? `Detected voice emotion: ${params.emotion}` : '',
+    params.emotion || params.vocalStyle
+      ? `Their VOICE sounded: ${[params.emotion, params.vocalStyle].filter(Boolean).join(', ')} — apply the voice-shapes-the-room rule.`
+      : '',
     `Classified stance: ${params.stance}`,
     params.addressed
       ? `The player spoke DIRECTLY to ${params.addressed}. ${params.addressed} MUST speak first and actually answer what was asked; others react after.`

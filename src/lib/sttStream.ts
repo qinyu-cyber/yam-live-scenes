@@ -60,8 +60,8 @@ export class SttStreamTurn {
     })
   }
 
-  /** Ends the turn; resolves the transcript, or null → caller falls back to batch. */
-  async finish(): Promise<string | null> {
+  /** Ends the turn; resolves transcript + voice profile, or null → batch fallback. */
+  async finish(): Promise<{ text: string; emotion?: string; vocalStyle?: string } | null> {
     this.flush()
     await this.sendChain
     const sid = await this.sid
@@ -71,7 +71,8 @@ export class SttStreamTurn {
       if (!r.ok) return null
       const json = await r.json()
       const text = (json.text ?? '').trim()
-      return text.length > 0 ? text : null
+      if (text.length === 0) return null
+      return { text, emotion: json.emotion, vocalStyle: json.vocalStyle }
     } catch {
       return null
     }

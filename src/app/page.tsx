@@ -80,9 +80,17 @@ export default function Home() {
       audioEngine.setState('thinking')
       let text = ''
       let detected: string | undefined
+      let vocalStyle: string | undefined
       // Primary: the streaming session that transcribed WHILE the player
-      // talked — its final lands ~150ms after speech end. Fallback: batch WAV.
-      if (streamed) text = (await streamed.finish()) ?? ''
+      // talked — its final lands ~200ms after speech end, WITH voice profile.
+      if (streamed) {
+        const result = await streamed.finish()
+        if (result) {
+          text = result.text
+          detected = result.emotion
+          vocalStyle = result.vocalStyle
+        }
+      }
       if (!text) {
         try {
           const form = new FormData()
@@ -98,7 +106,7 @@ export default function Home() {
         }
       }
       markTurn('stt_done')
-      setEmotion(detected ?? null)
+      setEmotion(detected ? `${detected}${vocalStyle ? ` (${vocalStyle})` : ''}` : null)
       if (!text) {
         setCaption({ text: "(didn't catch that — say it again?)" })
         audioEngine.setState('listening')
@@ -118,7 +126,7 @@ export default function Home() {
       const res = await fetch('/api/scene', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ transcript: text, emotion: detected }),
+        body: JSON.stringify({ transcript: text, emotion: detected, vocalStyle }),
       })
 
       const beatQueue: Array<{ beat: Beat; audio: Promise<Response> }> = []

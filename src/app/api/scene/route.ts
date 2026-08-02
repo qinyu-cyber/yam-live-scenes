@@ -34,11 +34,23 @@ const STANCE_DELTA: Record<string, number> = {
   alone_but_iconic: 0,
 }
 
+// Voice-emotion valence → relationship delta modifier. Warmth lands as +1;
+// negative emotion costs -1 — EXCEPT on the villain arc, where fire is
+// exactly what Sukuna wants (+1 for angry/disgusted).
+function emotionDelta(emotion: string | undefined, stance: string): number {
+  if (!emotion) return 0
+  if (['happy', 'tender', 'surprised', 'calm'].includes(emotion)) return 1
+  if (['angry', 'disgusted'].includes(emotion)) return stance === 'villain_romance' ? 1 : -1
+  if (['sad', 'fearful'].includes(emotion)) return -1
+  return 0
+}
+
 export async function POST(req: Request) {
   const t0 = Date.now()
-  const { transcript, emotion } = (await req.json()) as {
+  const { transcript, emotion, vocalStyle } = (await req.json()) as {
     transcript: string
     emotion?: string
+    vocalStyle?: string
   }
   if (!transcript?.trim()) {
     return Response.json({ error: 'empty transcript' }, { status: 400 })
@@ -56,7 +68,7 @@ export async function POST(req: Request) {
 
   const target = addressed ?? OPENING.asker
   const relDeltas: RelScores = {
-    [target]: STANCE_DELTA[stance] + (emotion === 'happy' ? 1 : 0),
+    [target]: STANCE_DELTA[stance] + emotionDelta(emotion, stance),
   }
 
   const encoder = new TextEncoder()
@@ -72,7 +84,13 @@ export async function POST(req: Request) {
       let provider: 'inworld' | 'tenstorrent' | 'claude' | undefined
       try {
         const result = await streamBranch(
-          { transcript, emotion, stance, addressed: addressed ? idToName(addressed) : undefined },
+          {
+            transcript,
+            emotion,
+            vocalStyle,
+            stance,
+            addressed: addressed ? idToName(addressed) : undefined,
+          },
           (beat) => {
             emitted.push(beat)
             send({ type: 'beat', beat })
@@ -111,6 +129,7 @@ export async function POST(req: Request) {
             ts: new Date().toISOString(),
             transcript,
             emotion,
+            vocalStyle,
             stance,
             reactionLineId: reaction.id,
             relDeltas,

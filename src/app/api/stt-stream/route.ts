@@ -13,9 +13,20 @@ type Session = {
   ready: Promise<void>
   latest: string
   finals: string[]
+  emotion?: string
+  vocalStyle?: string
   done: Promise<void>
   resolveDone: () => void
   startedAt: number
+}
+
+type ProfileLabel = { label?: string; confidence?: number }
+
+// Top label above threshold, ignoring the non-informative classes.
+function topLabel(labels: ProfileLabel[] | undefined, ignore: string[]): string | undefined {
+  const best = labels?.[0]
+  if (!best?.label || (best.confidence ?? 0) < 0.4) return undefined
+  return ignore.includes(best.label) ? undefined : best.label
 }
 
 const sessions = new Map<string, Session>()
@@ -61,10 +72,13 @@ function openSession(): Session {
     ws.send(
       JSON.stringify({
         transcribeConfig: {
-          modelId: 'inworld/inworld-stt-1',
+          modelId: 'inworld/inworld-stt-1', // newest streaming model — 'stt-2' does not exist (API-confirmed)
           audioEncoding: 'LINEAR16',
           sampleRateHertz: 16000,
           language: 'en',
+          // Cast-name bias so 'Gojo'/'Choso' don't mis-transcribe.
+          prompts: ['Gojo', 'Satoru', 'Sukuna', 'Toji', 'Choso', 'Nanami', 'Geto', 'villa'],
+          voiceProfileConfig: { enableVoiceProfile: true, topN: 2 },
         },
       }),
     )
@@ -77,6 +91,11 @@ function openSession(): Session {
       if (tr?.transcript) {
         session.latest = tr.transcript
         if (tr.isFinal) session.finals.push(tr.transcript)
+      }
+      const profile = tr?.voiceProfile
+      if (profile) {
+        session.emotion = topLabel(profile.emotion, ['unclear']) ?? session.emotion
+        session.vocalStyle = topLabel(profile.vocalStyle, ['unclear', 'normal']) ?? session.vocalStyle
       }
       if (msg.result?.usage) session.resolveDone() // usage = stream fully processed
     } catch {
@@ -129,8 +148,9 @@ export async function POST(req: Request) {
     // usage message (or close/error) marks completion; don't hang past 2.5s
     await Promise.race([session.done, new Promise((r) => setTimeout(r, 2500))])
     const text = (session.finals.length ? session.finals.join(' ') : session.latest).trim()
+    const { emotion, vocalStyle } = session
     cleanup(sid)
-    return Response.json({ text, ms: Date.now() - t0 })
+    return Response.json({ text, emotion, vocalStyle, ms: Date.now() - t0 })
   }
 
   return Response.json({ error: 'unknown op' }, { status: 400 })
