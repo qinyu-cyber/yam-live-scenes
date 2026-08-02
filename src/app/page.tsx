@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Beat, CharId, EngineState, RelScores, SceneStreamLine, Stance } from '@/lib/types'
 import { audioEngine, loadManifest } from '@/lib/audioEngine'
 import { VoiceLoop } from '@/lib/vad'
+import { SttStreamTurn } from '@/lib/sttStream'
 import { markTurn, newTurn, currentTurn, logTable } from '@/lib/metrics'
 import { classifyStance } from '@/lib/stance'
 import Stage from '@/components/Stage'
@@ -73,23 +74,28 @@ export default function Home() {
   )
 
   const runTurn = useCallback(
-    async (wav: Blob) => {
+    async (wav: Blob, streamed: SttStreamTurn | null) => {
       turnInFlightRef.current = true
       markTurn('mic_release')
       audioEngine.setState('thinking')
       let text = ''
       let detected: string | undefined
-      try {
-        const form = new FormData()
-        form.append('audio', wav, 'audio.wav')
-        const res = await fetch('/api/stt', { method: 'POST', body: form })
-        if (res.ok) {
-          const json = await res.json()
-          text = (json.text ?? '').trim()
-          detected = json.emotion
+      // Primary: the streaming session that transcribed WHILE the player
+      // talked — its final lands ~150ms after speech end. Fallback: batch WAV.
+      if (streamed) text = (await streamed.finish()) ?? ''
+      if (!text) {
+        try {
+          const form = new FormData()
+          form.append('audio', wav, 'audio.wav')
+          const res = await fetch('/api/stt', { method: 'POST', body: form })
+          if (res.ok) {
+            const json = await res.json()
+            text = (json.text ?? '').trim()
+            detected = json.emotion
+          }
+        } catch (err) {
+          console.error('[stt]', err)
         }
-      } catch (err) {
-        console.error('[stt]', err)
       }
       markTurn('stt_done')
       setEmotion(detected ?? null)
@@ -196,7 +202,7 @@ export default function Home() {
       // it becomes the next turn immediately.
       const pending = pendingWavRef.current
       pendingWavRef.current = null
-      if (pending) void runTurnRef.current?.(pending)
+      if (pending) void runTurnRef.current?.(pending, null)
     },
     [playBeat],
   )
@@ -210,9 +216,13 @@ export default function Home() {
 
     // Always-on conversational mic: speech is detected automatically — speaking
     // over a character is a barge-in, no button anywhere.
+    let sttTurn: SttStreamTurn | null = null
     const loop = new VoiceLoop({
       onSpeechStart: () => {
         if (!openingDoneRef.current) return // the cold open always lands
+        // Streaming STT session opens the moment speech starts — transcribing
+        // runs concurrently with the player talking.
+        sttTurn = new SttStreamTurn()
         // Barge-in: characters stop the moment the player starts talking —
         // including mid-branch while a turn is still technically in flight.
         if (audioEngine.getState() === 'playing') {
@@ -221,15 +231,20 @@ export default function Home() {
         }
         if (!turnInFlightRef.current) newTurn()
       },
+      onSpeechFrame: (pcm, rate) => {
+        if (openingDoneRef.current) sttTurn?.push(pcm, rate)
+      },
       onSpeechEnd: (wav) => {
         if (!openingDoneRef.current) return
+        const streamed = sttTurn
+        sttTurn = null
         if (turnInFlightRef.current) {
           // The interrupted turn is still unwinding — park the utterance; it
           // starts the next turn the instant the old one releases.
           pendingWavRef.current = wav
           return
         }
-        void runTurn(wav)
+        void runTurn(wav, streamed)
       },
       onMicError: () => setMicOk(false),
       onLevel: (rms) => setMicLevel(rms),

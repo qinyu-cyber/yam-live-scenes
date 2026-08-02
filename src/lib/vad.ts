@@ -52,6 +52,8 @@ export type VoiceLoopHandlers = {
   onMicError: () => void
   /** Called ~every 130ms with the current mic RMS — drive a level indicator. */
   onLevel?: (rms: number) => void
+  /** Every captured frame while speaking (pre-roll included) — feeds streaming STT. */
+  onSpeechFrame?: (pcm: Float32Array, sampleRate: number) => void
 }
 
 export class VoiceLoop {
@@ -112,6 +114,8 @@ export class VoiceLoop {
           this.preroll = []
           this.quietFrames = 0
           this.handlers.onSpeechStart()
+          const rate = this.ctx?.sampleRate ?? 48000
+          for (const f of this.captured) this.handlers.onSpeechFrame?.(f, rate)
         }
       } else {
         this.loudFrames = 0
@@ -120,6 +124,7 @@ export class VoiceLoop {
     }
 
     this.captured.push(copy)
+    this.handlers.onSpeechFrame?.(copy, this.ctx?.sampleRate ?? 48000)
     if (rms < END_RMS) {
       this.quietFrames++
       if (this.quietFrames >= END_FRAMES) this.finishUtterance()
