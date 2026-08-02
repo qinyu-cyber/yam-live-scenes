@@ -6,8 +6,6 @@ import Portrait, { CAST_UI } from './Portrait'
 import Captions from './Captions'
 
 const CAST_ORDER: CharId[] = ['gojo', 'sukuna', 'toji', 'choso', 'nanami', 'geto']
-// Gentle arc: edge characters sit higher, center characters lower.
-const ARC_OFFSETS = [0, 16, 28, 28, 16, 0]
 
 type StageProps = {
   speaking: CharId | null
@@ -80,13 +78,13 @@ export default function Stage({
         </div>
       )}
 
-      {/* Cast arc across the lower-middle. */}
-      <div className="absolute inset-x-0 bottom-44 flex items-end justify-center gap-3 px-4 sm:gap-6">
-        {CAST_ORDER.map((id, i) => (
+      {/* Standee row: full-height cutouts on one ground line at the bottom of
+          the backdrop; the dialogue card overlays their legs, VN-style. */}
+      <div className="absolute inset-x-0 bottom-0 flex h-[62vh] items-end justify-center gap-1 px-4 sm:gap-3">
+        {CAST_ORDER.map((id) => (
           <div
             key={id}
-            style={{ transform: `translateY(${ARC_OFFSETS[i]}px)` }}
-            className={onPortraitSelect ? 'cursor-pointer' : undefined}
+            className={`h-full ${onPortraitSelect ? 'cursor-pointer' : ''}`}
             onClick={() => onPortraitSelect?.(id)}
             title={onPortraitSelect ? `private call with ${CAST_UI[id].name}` : undefined}
           >
@@ -95,6 +93,7 @@ export default function Stage({
               name={CAST_UI[id].name}
               accent={CAST_UI[id].accent}
               speaking={speaking === id}
+              dimmed={speaking !== null && speaking !== id}
             />
           </div>
         ))}

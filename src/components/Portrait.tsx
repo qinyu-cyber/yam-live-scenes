@@ -18,54 +18,55 @@ type PortraitProps = {
   name: string
   accent: string
   speaking: boolean
+  /** Someone ELSE is speaking — VN convention dims the rest of the cast. */
+  dimmed: boolean
 }
 
-export default function Portrait({ id, name, accent, speaking }: PortraitProps) {
+// Standee: the full-body cutout stands directly on the backdrop — no frame.
+// The speaker gets an accent glow that follows the PNG's alpha edge.
+export default function Portrait({ id, name, accent, speaking, dimmed }: PortraitProps) {
   const [imgOk, setImgOk] = useState(true)
 
   return (
     <div
-      className={`flex flex-col items-center gap-2 transition-all duration-300 ${
-        speaking ? 'scale-110 opacity-100' : 'scale-100 opacity-60'
+      className={`relative h-full origin-bottom transition-transform duration-300 ${
+        speaking ? 'scale-105' : ''
       }`}
     >
+      {imgOk ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/images/portraits/${id}.png`}
+          alt={name}
+          className="h-full w-auto object-contain object-bottom transition-[filter] duration-300"
+          style={{
+            filter: speaking
+              ? `drop-shadow(0 0 20px ${accent}aa) drop-shadow(0 0 56px ${accent}55)`
+              : dimmed
+                ? 'brightness(0.55)'
+                : undefined,
+          }}
+          onError={() => setImgOk(false)}
+        />
+      ) : (
+        // No art — fall back to the letter card so the slot stays clickable.
+        <div
+          className="flex h-full w-28 items-center justify-center rounded-2xl border sm:w-32"
+          style={{
+            borderColor: speaking ? accent : 'rgba(255,255,255,0.15)',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.35))',
+          }}
+        >
+          <span
+            className="text-6xl font-black"
+            style={{ color: accent, textShadow: `0 0 20px ${accent}88` }}
+          >
+            {name[0]}
+          </span>
+        </div>
+      )}
       <div
-        className="relative h-40 w-28 overflow-hidden rounded-2xl border backdrop-blur-md transition-shadow duration-300 sm:h-48 sm:w-32"
-        style={{
-          borderColor: speaking ? accent : 'rgba(255,255,255,0.15)',
-          boxShadow: speaking
-            ? `0 0 24px ${accent}aa, 0 0 60px ${accent}44`
-            : '0 4px 16px rgba(0,0,0,0.4)',
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.35))',
-        }}
-      >
-        {imgOk ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/images/portraits/${id}.png`}
-            alt={name}
-            className="h-full w-full object-cover object-top"
-            onError={() => setImgOk(false)}
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <span
-              className="text-6xl font-black"
-              style={{ color: accent, textShadow: `0 0 20px ${accent}88` }}
-            >
-              {name[0]}
-            </span>
-          </div>
-        )}
-        {speaking && (
-          <div
-            className="pointer-events-none absolute inset-0 animate-pulse rounded-2xl"
-            style={{ boxShadow: `inset 0 0 24px ${accent}66` }}
-          />
-        )}
-      </div>
-      <div
-        className="rounded-full border border-white/10 bg-black/50 px-3 py-0.5 text-xs font-semibold tracking-wide text-white/90 backdrop-blur-sm"
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-white/10 bg-black/50 px-3 py-0.5 text-xs font-semibold tracking-wide text-white/90 backdrop-blur-sm"
         style={speaking ? { borderColor: accent, color: accent } : undefined}
       >
         {name}
