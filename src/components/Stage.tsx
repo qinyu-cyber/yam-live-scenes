@@ -80,7 +80,7 @@ export default function Stage({
 
       {/* Standee row: full-height cutouts on one ground line at the bottom of
           the backdrop; the dialogue card overlays their legs, VN-style. */}
-      <div className="absolute inset-x-0 bottom-0 flex h-[62vh] items-end justify-center gap-1 px-4 sm:gap-3">
+      <div className="absolute inset-x-0 bottom-0 flex h-[85vh] items-end justify-center gap-1 px-4 sm:gap-3">
         {CAST_ORDER.map((id) => (
           <div
             key={id}
