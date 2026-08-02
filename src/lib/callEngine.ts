@@ -24,8 +24,18 @@ export class RealtimeCall {
   private nodes: AudioBufferSourceNode[] = []
   private nextStart = 0
   private stopped = false
+  private muted = false
 
   constructor(private handlers: CallHandlers) {}
+
+  /** Muted mic sends nothing — the character just hears silence. */
+  setMuted(muted: boolean): void {
+    this.muted = muted
+    if (muted) {
+      this.pending = []
+      this.pendingBytes = 0
+    }
+  }
 
   async start(charId: CharId, history: HistoryEntry[]): Promise<boolean> {
     const res = await fetch('/api/realtime?op=start', {
@@ -45,6 +55,7 @@ export class RealtimeCall {
     this.proc = this.ctx.createScriptProcessor(4096, 1, 1)
     const inputRate = this.ctx.sampleRate
     this.proc.onaudioprocess = (e) => {
+      if (this.muted) return
       const input = e.inputBuffer.getChannelData(0)
       const step = inputRate / CALL_RATE
       const out = new Int16Array(Math.floor(input.length / step))

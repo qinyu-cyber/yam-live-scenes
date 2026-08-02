@@ -24,13 +24,13 @@ export default function TitleScreen({ onEnter }: TitleScreenProps) {
         className="absolute inset-0"
         style={{
           background:
-            'linear-gradient(180deg, #0f0a2e 0%, #4a1d4e 40%, #9a3412 75%, #d97706 100%)',
+            'linear-gradient(180deg, #0b0716 0%, #241a4d 45%, #4c2a7a 78%, #7c4dbf 100%)',
         }}
       />
       <div className="absolute inset-0 bg-black/40" />
 
       <div className="relative flex flex-col items-center gap-3 text-center">
-        <h1 className="bg-gradient-to-b from-white via-amber-100 to-amber-400 bg-clip-text text-6xl font-black tracking-tight text-transparent drop-shadow-lg sm:text-7xl">
+        <h1 className="bg-gradient-to-b from-white via-violet-100 to-violet-400 bg-clip-text text-6xl font-black tracking-tight text-transparent drop-shadow-lg sm:text-7xl">
           YAM LIVE SCENES
         </h1>
         <p className="text-lg font-medium text-white/80">
@@ -42,7 +42,7 @@ export default function TitleScreen({ onEnter }: TitleScreenProps) {
         <button
           onClick={handleClick}
           disabled={loading}
-          className="rounded-full border border-amber-300/40 bg-gradient-to-b from-amber-400 to-orange-600 px-10 py-4 text-xl font-bold text-white shadow-[0_0_40px_rgba(245,158,11,0.5)] transition-transform hover:scale-105 active:scale-95 disabled:cursor-wait disabled:opacity-70"
+          className="rounded-full border border-violet-300/40 bg-gradient-to-b from-violet-500 to-fuchsia-700 px-10 py-4 text-xl font-bold text-white shadow-[0_0_40px_rgba(139,92,246,0.5)] transition-transform hover:scale-105 active:scale-95 disabled:cursor-wait disabled:opacity-70"
         >
           {loading ? (
             <span className="flex items-center gap-3">

@@ -67,8 +67,22 @@ export class VoiceLoop {
   private loudFrames = 0
   private quietFrames = 0
   private running = false
+  private muted = false
 
   constructor(private handlers: VoiceLoopHandlers) {}
+
+  /** Mute drops audio at the source — nothing captures, nothing triggers. */
+  setMuted(muted: boolean): void {
+    this.muted = muted
+    if (muted) {
+      this.speaking = false
+      this.captured = []
+      this.preroll = []
+      this.loudFrames = 0
+      this.quietFrames = 0
+      this.handlers.onLevel?.(0)
+    }
+  }
 
   async start(): Promise<boolean> {
     if (this.running) return true
@@ -97,6 +111,7 @@ export class VoiceLoop {
   private frameCount = 0
 
   private onFrame(frame: Float32Array): void {
+    if (this.muted) return
     const copy = new Float32Array(frame)
     let sum = 0
     for (let i = 0; i < copy.length; i++) sum += copy[i] * copy[i]

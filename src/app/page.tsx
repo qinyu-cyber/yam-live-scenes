@@ -40,6 +40,10 @@ export default function Home() {
   const [micOk, setMicOk] = useState<boolean | null>(null)
   const [openingDone, setOpeningDone] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
+  const [muted, setMuted] = useState(false)
+  // Beat position within the playing scene — drives the dialogue-card pips.
+  const [progress, setProgress] = useState<{ i: number; total: number } | null>(null)
+  const mutedRef = useRef(false)
   const manifestRef = useRef<Record<string, string> | null>(null)
   // Post-opening conversation as actually HEARD — beats are appended only
   // after they play; a barged-in beat is marked cut; dropped beats never enter.
@@ -56,6 +60,18 @@ export default function Home() {
   const voiceLoopRef = useRef<VoiceLoop | null>(null)
 
   useEffect(() => audioEngine.onStateChange(setEngineState), [])
+
+  // Self-mute: drops mic audio at the source in whichever engine is live —
+  // the group VoiceLoop and any in-progress private call.
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m
+      mutedRef.current = next
+      voiceLoopRef.current?.setMuted(next)
+      callRef.current?.setMuted(next)
+      return next
+    })
+  }, [])
 
   const fetchTts = useCallback((beat: Beat): Promise<Response> => {
     const voice = VOICES[beat.speaker]
@@ -97,6 +113,7 @@ export default function Home() {
       turnInFlightRef.current = true
       markTurn('mic_release')
       audioEngine.setState('thinking')
+      setProgress(null)
       let text = ''
       let detected: string | undefined
       let vocalStyle: string | undefined
@@ -210,6 +227,7 @@ export default function Home() {
       // Play beats as they arrive; the queue drains while the stream still fills.
       // State stays 'thinking' until the first beat's audio is ready to go.
       let started = false
+      let played = 0
       for (;;) {
         if (started && audioEngine.getState() !== 'playing') break // barge-in mid-branch
         const entry = beatQueue.shift()
@@ -219,6 +237,9 @@ export default function Home() {
             audioEngine.setState('playing')
             markTurn('playback_start')
           }
+          // Pips: total grows as beats stream in — honest about an open scene.
+          played++
+          setProgress({ i: played, total: played + beatQueue.length })
           await playBeat(
             entry.beat,
             `beat_live_${entry.beat.speaker}`,
@@ -307,11 +328,13 @@ export default function Home() {
     for (let i = 0; i < OPENING.beats.length; i++) {
       if (audioEngine.getState() !== 'playing') break
       const next = OPENING.beats[i + 1]
+      setProgress({ i: i + 1, total: OPENING.beats.length })
       await playBeat(OPENING.beats[i], `opening_${i}`, next?.cutoff ? 0.72 : undefined)
     }
     openingDoneRef.current = true
     setOpeningDone(true)
     setNarration(null)
+    setProgress(null)
     setCaption({ speaker: idToName(OPENING.asker), text: OPENING.question })
     audioEngine.setState('listening')
   }, [playBeat, runTurn])
@@ -339,6 +362,7 @@ export default function Home() {
       },
     })
     callRef.current = engine
+    engine.setMuted(mutedRef.current) // mute state carries into the call
     const ok = await engine.start(charId, historyRef.current.slice(-20))
     if (!ok) {
       inCallRef.current = false
@@ -373,7 +397,7 @@ export default function Home() {
   if (call) {
     const ui = CAST_UI[call.charId]
     return (
-      <div className="relative flex h-screen w-screen flex-col items-center justify-center gap-6 bg-gradient-to-b from-zinc-950 via-zinc-900 to-black">
+      <div className="relative flex h-screen w-screen flex-col items-center justify-center gap-6 bg-[linear-gradient(180deg,#0b0716_0%,#1c1240_55%,#000_100%)]">
         <p className="text-xs uppercase tracking-widest text-white/40">
           private call — the villa can&apos;t hear you
         </p>
@@ -396,12 +420,24 @@ export default function Home() {
           {call.userText && <p className="mb-2 text-sm text-white/50">you: {call.userText}</p>}
           <p className="min-h-12 text-lg text-white/90">{call.charText || 'just talk — they can hear you'}</p>
         </div>
-        <button
-          onClick={endCall}
-          className="rounded-full border border-red-400/40 bg-red-500/20 px-6 py-2 text-red-200 hover:bg-red-500/30"
-        >
-          hang up
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={toggleMute}
+            className={`rounded-full border px-5 py-2 transition-colors ${
+              muted
+                ? 'border-amber-400/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'
+                : 'border-white/20 bg-white/10 text-white/80 hover:bg-white/20'
+            }`}
+          >
+            {muted ? '🔇 muted' : '🎙 mute'}
+          </button>
+          <button
+            onClick={endCall}
+            className="rounded-full border border-red-400/40 bg-red-500/20 px-6 py-2 text-red-200 hover:bg-red-500/30"
+          >
+            hang up
+          </button>
+        </div>
       </div>
     )
   }
@@ -411,6 +447,8 @@ export default function Home() {
       speaking={speaking}
       caption={caption}
       narration={narration}
+      hearts={100 + 5 * Object.values(rel).reduce((n, v) => n + (v ?? 0), 0)}
+      progress={progress}
       onPortraitSelect={openingDone ? (id) => void startCall(id) : undefined}
       debug={
         <DebugPanel
@@ -440,6 +478,11 @@ export default function Home() {
           <span>mic blocked — click the 🔒 by the address bar, allow Microphone, refresh</span>
         ) : !openingDone ? (
           <span>the villa is talking — Gojo turns to you in a moment</span>
+        ) : muted ? (
+          <>
+            <span className="h-2.5 w-2.5 rounded-full bg-zinc-500" />
+            <span>muted — the villa can&apos;t hear you</span>
+          </>
         ) : engineState === 'thinking' ? (
           <span>…</span>
         ) : (
@@ -454,6 +497,19 @@ export default function Home() {
           </>
         )}
       </div>
+      {/* Self-mute — for background noise; audio drops at the source. */}
+      {openingDone && (
+        <button
+          onClick={toggleMute}
+          className={`pointer-events-auto ml-3 rounded-full border px-3 py-1 text-xs backdrop-blur transition-colors ${
+            muted
+              ? 'border-amber-400/50 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'
+              : 'border-white/20 bg-black/50 text-white/70 hover:bg-black/70'
+          }`}
+        >
+          {muted ? '🔇 muted' : '🎙 mute'}
+        </button>
+      )}
     </Stage>
   )
 }
