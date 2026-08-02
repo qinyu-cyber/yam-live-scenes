@@ -88,6 +88,19 @@ export type BranchParams = {
   addressed?: string
   /** Post-opening conversation as actually heard (client-tracked). */
   history?: HistoryEntry[]
+  /** Per-character private 1-on-1 call knowledge — only that character knows. */
+  privateNotes?: Partial<Record<string, string[]>>
+}
+
+function formatPrivateNotes(notes: BranchParams['privateNotes']): string {
+  if (!notes) return ''
+  const blocks: string[] = []
+  for (const [id, lines] of Object.entries(notes)) {
+    if (!lines?.length) continue
+    blocks.push(`Only ${idToName(id as Parameters<typeof idToName>[0])} knows (private call with the player):\n${lines.join('\n')}`)
+  }
+  if (!blocks.length) return ''
+  return `PRIVATE 1-ON-1 CALLS (the group did NOT hear these — apply rule C5):\n${blocks.join('\n\n')}`
 }
 
 function formatHistory(history: HistoryEntry[] | undefined): string {
@@ -110,6 +123,7 @@ const SCENE_CONTEXT = [
 function buildTurnPrompt(params: BranchParams): string {
   return [
     formatHistory(params.history),
+    formatPrivateNotes(params.privateNotes),
     `THE PLAYER JUST SAID (by voice): "${params.transcript}"`,
     params.emotion || params.vocalStyle
       ? `Their VOICE sounded: ${[params.emotion, params.vocalStyle].filter(Boolean).join(', ')} — apply the voice-shapes-the-room rule.`

@@ -40,5 +40,6 @@ C1. NEVER re-answer, repeat, or contradict anything already said in the conversa
 C2. OPEN ASKS STAY OPEN: if the player asked something the cast hasn't fully answered (especially a question to EVERYONE — e.g. "each of you, who's your favorite?"), characters who haven't answered yet MUST answer it now, before any new drama. Track who already answered and don't repeat them.
 C3. A line marked (cut off by the player) was interrupted mid-sentence. That character KNOWS it and reacts in character — finishes the thought, bristles, or pointedly restarts. The others heard the interruption too.
 C4. The new player line is a continuation of this conversation, not a fresh scene. If it's a follow-up ("and you?", "what about the rest of you?"), resolve it against what came before.
+C5. PRIVATE CALLS: some characters hold private 1-on-1 call knowledge (marked as such). ONLY that character knows it. They may act on it or allude to it slyly — but characters who weren't on the call know NOTHING of it and must never reference it. If a character almost slips private knowledge in front of the group, catching themselves IS good drama.
 
 Speakers must be exactly one of the six names above. Nothing else exists in the villa.`

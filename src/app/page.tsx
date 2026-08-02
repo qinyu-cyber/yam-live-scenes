@@ -13,6 +13,8 @@ import type {
 import { audioEngine, loadManifest } from '@/lib/audioEngine'
 import { VoiceLoop } from '@/lib/vad'
 import { SttStreamTurn } from '@/lib/sttStream'
+import { RealtimeCall } from '@/lib/callEngine'
+import { CAST_UI } from '@/components/Portrait'
 import { markTurn, newTurn, currentTurn, logTable } from '@/lib/metrics'
 import { classifyStance } from '@/lib/stance'
 import Stage from '@/components/Stage'
@@ -42,6 +44,12 @@ export default function Home() {
   // Post-opening conversation as actually HEARD — beats are appended only
   // after they play; a barged-in beat is marked cut; dropped beats never enter.
   const historyRef = useRef<HistoryEntry[]>([])
+  // Private 1-on-1 call state. What's said on a call lives ONLY in that
+  // character's private notes — the group never sees it.
+  const [call, setCall] = useState<{ charId: CharId; charText: string; userText: string } | null>(null)
+  const callRef = useRef<RealtimeCall | null>(null)
+  const inCallRef = useRef(false)
+  const privateNotesRef = useRef<Partial<Record<CharId, string[]>>>({})
   const openingDoneRef = useRef(false)
   const turnInFlightRef = useRef(false)
   const pendingWavRef = useRef<Blob | null>(null)
@@ -146,6 +154,7 @@ export default function Home() {
           vocalStyle,
           // everything before this utterance (it's already the transcript)
           history: historyRef.current.slice(0, -1).slice(-20),
+          privateNotes: privateNotesRef.current,
         }),
       })
 
@@ -253,6 +262,7 @@ export default function Home() {
     let sttTurn: SttStreamTurn | null = null
     const loop = new VoiceLoop({
       onSpeechStart: () => {
+        if (inCallRef.current) return // the call engine owns the mic
         if (!openingDoneRef.current) return // the cold open always lands
         // Streaming STT session opens the moment speech starts — transcribing
         // runs concurrently with the player talking.
@@ -266,10 +276,10 @@ export default function Home() {
         if (!turnInFlightRef.current) newTurn()
       },
       onSpeechFrame: (pcm, rate) => {
-        if (openingDoneRef.current) sttTurn?.push(pcm, rate)
+        if (openingDoneRef.current && !inCallRef.current) sttTurn?.push(pcm, rate)
       },
       onSpeechEnd: (wav) => {
-        if (!openingDoneRef.current) return
+        if (inCallRef.current || !openingDoneRef.current) return
         const streamed = sttTurn
         sttTurn = null
         if (turnInFlightRef.current) {
@@ -313,13 +323,95 @@ export default function Home() {
     audioEngine.setState('listening')
   }, [])
 
+  const startCall = useCallback(async (charId: CharId) => {
+    if (!openingDoneRef.current || inCallRef.current) return
+    audioEngine.stop() // group scene goes quiet; the villa waits
+    audioEngine.setState('listening')
+    inCallRef.current = true
+    setCall({ charId, charText: '', userText: '' })
+    const engine = new RealtimeCall({
+      onCharText: (delta) =>
+        setCall((c) => (c ? { ...c, charText: (c.charText + delta).slice(-300) } : c)),
+      onUserText: (text) => setCall((c) => (c ? { ...c, userText: text, charText: '' } : c)),
+      onEnded: () => {
+        // server closed on us — treat as hang-up
+        if (inCallRef.current) void endCallRef.current?.()
+      },
+    })
+    callRef.current = engine
+    const ok = await engine.start(charId, historyRef.current.slice(-20))
+    if (!ok) {
+      inCallRef.current = false
+      callRef.current = null
+      setCall(null)
+      setCaption({ text: '(call failed — try again)' })
+    }
+  }, [])
+
+  const endCall = useCallback(async () => {
+    const engine = callRef.current
+    const current = call
+    callRef.current = null
+    inCallRef.current = false
+    setCall(null)
+    if (!engine) return
+    const transcript = await engine.stop()
+    if (current && transcript.length) {
+      // The character remembers the call; the group never hears it.
+      const notes = (privateNotesRef.current[current.charId] ??= [])
+      for (const t of transcript) {
+        notes.push(`${t.who === 'player' ? 'player' : 'me'}: ${t.text}`)
+      }
+      privateNotesRef.current[current.charId] = notes.slice(-12)
+    }
+  }, [call])
+  const endCallRef = useRef<typeof endCall | null>(null)
+  endCallRef.current = endCall
+
   if (!entered) return <TitleScreen onEnter={enterVilla} />
+
+  if (call) {
+    const ui = CAST_UI[call.charId]
+    return (
+      <div className="relative flex h-screen w-screen flex-col items-center justify-center gap-6 bg-gradient-to-b from-zinc-950 via-zinc-900 to-black">
+        <p className="text-xs uppercase tracking-widest text-white/40">
+          private call — the villa can&apos;t hear you
+        </p>
+        <div
+          className="h-44 w-44 overflow-hidden rounded-full border-2"
+          style={{ borderColor: ui.accent, boxShadow: `0 0 60px ${ui.accent}55` }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/images/portraits/${call.charId}.png`}
+            alt={ui.name}
+            className="h-full w-full object-cover object-top"
+            onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+          />
+        </div>
+        <p className="text-2xl font-semibold" style={{ color: ui.accent }}>
+          {ui.name}
+        </p>
+        <div className="max-w-xl px-6 text-center">
+          {call.userText && <p className="mb-2 text-sm text-white/50">you: {call.userText}</p>}
+          <p className="min-h-12 text-lg text-white/90">{call.charText || 'just talk — they can hear you'}</p>
+        </div>
+        <button
+          onClick={endCall}
+          className="rounded-full border border-red-400/40 bg-red-500/20 px-6 py-2 text-red-200 hover:bg-red-500/30"
+        >
+          hang up
+        </button>
+      </div>
+    )
+  }
 
   return (
     <Stage
       speaking={speaking}
       caption={caption}
       narration={narration}
+      onPortraitSelect={openingDone ? (id) => void startCall(id) : undefined}
       debug={
         <DebugPanel
           state={engineState}

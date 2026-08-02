@@ -13,11 +13,19 @@ type StageProps = {
   speaking: CharId | null
   caption: { speaker?: string; text: string } | null
   narration?: string | null
+  onPortraitSelect?: (id: CharId) => void
   children?: ReactNode
   debug?: ReactNode
 }
 
-export default function Stage({ speaking, caption, narration, children, debug }: StageProps) {
+export default function Stage({
+  speaking,
+  caption,
+  narration,
+  onPortraitSelect,
+  children,
+  debug,
+}: StageProps) {
   const [bgOk, setBgOk] = useState(true)
 
   return (
@@ -54,7 +62,13 @@ export default function Stage({ speaking, caption, narration, children, debug }:
       {/* Cast arc across the lower-middle. */}
       <div className="absolute inset-x-0 bottom-40 flex items-end justify-center gap-3 px-4 sm:gap-6">
         {CAST_ORDER.map((id, i) => (
-          <div key={id} style={{ transform: `translateY(${ARC_OFFSETS[i]}px)` }}>
+          <div
+            key={id}
+            style={{ transform: `translateY(${ARC_OFFSETS[i]}px)` }}
+            className={onPortraitSelect ? 'cursor-pointer' : undefined}
+            onClick={() => onPortraitSelect?.(id)}
+            title={onPortraitSelect ? `private call with ${CAST_UI[id].name}` : undefined}
+          >
             <Portrait
               id={id}
               name={CAST_UI[id].name}

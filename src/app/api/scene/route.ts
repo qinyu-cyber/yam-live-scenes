@@ -74,9 +74,19 @@ export async function POST(req: Request) {
     emotion?: string
     vocalStyle?: string
     history?: unknown
+    privateNotes?: unknown
   }
   const { transcript, emotion, vocalStyle } = body
   const history = sanitizeHistory(body.history)
+  const privateNotes: Partial<Record<string, string[]>> = {}
+  if (body.privateNotes && typeof body.privateNotes === 'object') {
+    for (const [k, v] of Object.entries(body.privateNotes as Record<string, unknown>)) {
+      const id = NAME_TO_ID[k.toLowerCase()]
+      if (id && Array.isArray(v)) {
+        privateNotes[id] = v.filter((x) => typeof x === 'string').map((x) => x.slice(0, 300)).slice(-12)
+      }
+    }
+  }
   if (!transcript?.trim()) {
     return Response.json({ error: 'empty transcript' }, { status: 400 })
   }
@@ -116,6 +126,7 @@ export async function POST(req: Request) {
             stance,
             addressed: addressed ? idToName(addressed) : undefined,
             history,
+            privateNotes,
           },
           (beat) => {
             emitted.push(beat)
