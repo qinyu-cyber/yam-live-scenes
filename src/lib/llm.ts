@@ -139,9 +139,13 @@ async function tenstorrentBranch(userPrompt: string): Promise<Beat[]> {
   return beats
 }
 
-// Race: Tenstorrent (fast, all-at-once) vs Claude (streamed beat-by-beat).
-// Whichever produces the first usable beat commits the turn; the loser is
-// discarded/aborted. Either failing alone is invisible to the player.
+export type Provider = 'inworld' | 'claude' | 'tenstorrent'
+
+// Three-way race: Inworld Router gpt-4o-mini (fastest — measured 810ms TTFT,
+// streamed), Claude opus-5 (strongest writing, streamed, cached prefix), and
+// Tenstorrent Qwen3-32B (all-at-once). The first provider to produce a usable
+// beat claims the whole turn; the others are aborted/discarded. Any one — or
+// two — failing is invisible to the player.
 export async function streamBranch(
   params: BranchParams,
   onBeat: (beat: Beat) => void,
@@ -149,13 +153,24 @@ export async function streamBranch(
   beatCount: number
   firstTokenMs: number | null
   totalMs: number
-  provider: 'tenstorrent' | 'claude' | null
+  provider: Provider | null
 }> {
   const start = Date.now()
   let firstTokenMs: number | null = null
   let beatCount = 0
-  let committed: 'tenstorrent' | 'claude' | null = null
+  let committed: Provider | null = null
   const userPrompt = buildTurnPrompt(params)
+  const inworldAbort = new AbortController()
+
+  const claim = (me: Provider): boolean => {
+    if (committed === null) {
+      committed = me
+      if (firstTokenMs === null) firstTokenMs = Date.now() - start
+      if (me !== 'claude') stream.controller.abort()
+      if (me !== 'inworld') inworldAbort.abort()
+    }
+    return committed === me
+  }
 
   const stream = client.messages.stream({
     model: 'claude-opus-5',
@@ -176,41 +191,82 @@ export async function streamBranch(
     messages: [{ role: 'user', content: userPrompt }],
   })
 
-  const scanner = new BeatScanner((obj) => {
-    if (committed === 'tenstorrent') return
+  const claudeScanner = new BeatScanner((obj) => {
     const [beat] = sanitizeBeats([obj])
-    if (beat) {
-      committed = 'claude'
+    if (beat && claim('claude')) {
       beatCount++
       onBeat(beat)
     }
   })
-
-  stream.on('text', (delta) => {
-    if (firstTokenMs === null) firstTokenMs = Date.now() - start
-    scanner.push(delta)
-  })
-
+  stream.on('text', (delta) => claudeScanner.push(delta))
   const claudeDone = stream
     .finalMessage()
     .then(() => {})
     .catch((err) => {
-      if (committed !== 'tenstorrent') console.error('[llm] claude failed:', err)
+      if (committed === 'claude' || committed === null)
+        console.warn('[llm] claude out:', String(err).slice(0, 100))
     })
+
+  // Inworld Router (OpenAI-compatible SSE) — same Basic key as TTS/STT.
+  const inworldDone = (async () => {
+    const key = process.env.INWORLD_API_KEY
+    if (!key) throw new Error('INWORLD_API_KEY not set')
+    const res = await fetch('https://api.inworld.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${key}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: 'openai/gpt-4o-mini',
+        stream: true,
+        max_tokens: 900, // plan-capped at 1000
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: `${BRANCH_SYSTEM_PROMPT}\n\n${SCENE_CONTEXT}` },
+          { role: 'user', content: userPrompt },
+        ],
+      }),
+      signal: inworldAbort.signal,
+    })
+    if (!res.ok || !res.body) throw new Error(`Inworld router ${res.status}`)
+    const scanner = new BeatScanner((obj) => {
+      const [beat] = sanitizeBeats([obj])
+      if (beat && claim('inworld')) {
+        beatCount++
+        onBeat(beat)
+      }
+    })
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.startsWith('data: ') || line.includes('[DONE]')) continue
+        try {
+          const delta = JSON.parse(line.slice(6)).choices?.[0]?.delta?.content
+          if (typeof delta === 'string') scanner.push(delta)
+        } catch {
+          // partial SSE line — skip
+        }
+      }
+    }
+  })().catch((err) => {
+    if (committed === null) console.warn('[llm] inworld router out:', String(err).slice(0, 100))
+  })
 
   const ttDone = tenstorrentBranch(userPrompt)
     .then((beats) => {
-      if (committed !== null) return // Claude already speaking — discard
-      committed = 'tenstorrent'
-      if (firstTokenMs === null) firstTokenMs = Date.now() - start
+      if (!claim('tenstorrent')) return // someone is already speaking
       for (const beat of beats) {
         beatCount++
         onBeat(beat)
       }
-      stream.controller.abort()
     })
-    .catch((err) => console.warn('[llm] tenstorrent lost the race:', String(err).slice(0, 120)))
+    .catch((err) => console.warn('[llm] tenstorrent out:', String(err).slice(0, 100)))
 
-  await Promise.allSettled([claudeDone, ttDone])
+  await Promise.allSettled([claudeDone, inworldDone, ttDone])
   return { beatCount, firstTokenMs, totalMs: Date.now() - start, provider: committed }
 }

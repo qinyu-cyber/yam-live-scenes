@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
       const emitted: Beat[] = []
       let firstTokenMs: number | null = null
-      let provider: 'tenstorrent' | 'claude' | undefined
+      let provider: 'inworld' | 'tenstorrent' | 'claude' | undefined
       try {
         const result = await streamBranch(
           { transcript, emotion, stance, addressed: addressed ? idToName(addressed) : undefined },

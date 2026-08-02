@@ -37,6 +37,6 @@ export type SceneStreamLine =
   | {
       type: 'done'
       branch: 'live' | 'preauthored'
-      provider?: 'tenstorrent' | 'claude'
+      provider?: 'inworld' | 'tenstorrent' | 'claude'
       timings: SceneTimings
     }

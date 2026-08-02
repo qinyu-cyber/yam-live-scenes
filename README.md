@@ -19,9 +19,10 @@ The demo is honest about its latency trick — masking is a design technique, no
                                                            │
                                           stance keywords (LIVE, <5ms)
                                                            │
-                                          branch writer RACE (LIVE):
-                                          Qwen3-32B on Tenstorrent vs streamed
-                                          Claude — first usable beat wins
+                                          branch writer RACE (LIVE), 3-way:
+                                          gpt-4o-mini via Inworld LLM Router vs
+                                          streamed Claude vs Qwen3-32B on
+                                          Tenstorrent — first usable beat wins
                                                            │
               beats play as they stream in (LIVE Inworld TTS per line;
               each beat's audio prefetches while the previous one plays) ◄┘
@@ -45,7 +46,8 @@ Real numbers from live runs on the build machine (the DebugPanel shows these per
 | Stance classification (keyword tiers) | < 5 ms |
 | Stance eval accuracy (20 labeled utterances) | **20/20** |
 | Branch: Qwen3-32B on Tenstorrent, all beats | ~4.4 s |
-| Branch: Claude (streamed), first beat (≤60 chars by contract) | **~3.5 s** |
+| Branch: gpt-4o-mini via Inworld Router, first beat | **~0.7–1.5 s** |
+| Branch: Claude (streamed, cached prefix), first beat | ~2.4 s |
 | Speech end → first live voice heard | ~4–5 s |
 
 Timestamps logged per turn: `mic_release → stt_done → stance_done → llm_first_token → tts_first_audio → playback_start` (see `src/lib/metrics.ts`, surfaced in the on-screen DebugPanel).
